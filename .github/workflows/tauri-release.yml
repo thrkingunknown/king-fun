@@ -17,11 +17,6 @@ on:
         required: false
         default: false
         type: boolean
-      android_only:
-        description: 'Build/publish Android only (mobile focus)'
-        required: false
-        default: true
-        type: boolean
 
 permissions:
   contents: write
@@ -39,7 +34,6 @@ jobs:
       name: ${{ steps.meta.outputs.name }}
       draft: ${{ inputs.draft }}
       prerelease: ${{ inputs.prerelease }}
-      android_only: ${{ inputs.android_only }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7.0.1
@@ -50,59 +44,6 @@ jobs:
           if [ -n "${{ inputs.tag }}" ]; then tag="${{ inputs.tag }}"; else version=$(node -p "require('./package.json').version"); tag="v${version}"; fi
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "name=KING-FUN ${tag}" >> "$GITHUB_OUTPUT"
-
-  desktop:
-    if: inputs.android_only != true
-    name: Build and publish desktop (${{ matrix.platform }})
-    needs: prepare
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: ubuntu-24.04
-          - platform: macos-15
-          - platform: windows-2022
-    runs-on: ${{ matrix.platform }}
-    env:
-      VITE_KING_FUN_API_URL: ${{ vars.VITE_KING_FUN_API_URL }}
-      TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - name: Require release configuration
-        shell: bash
-        run: |
-          if [ -z "$VITE_KING_FUN_API_URL" ]; then
-            echo "::error::Set the VITE_KING_FUN_API_URL repository variable before publishing Tauri releases."
-            exit 1
-          fi
-          if [ -z "${{ vars.TAURI_UPDATER_PUBLIC_KEY }}" ]; then
-            echo "::error::Set the TAURI_UPDATER_PUBLIC_KEY repository variable before publishing desktop updater artifacts."
-            exit 1
-          fi
-      - uses: oven-sh/setup-bun@v2.2.0
-        with:
-          bun-version: 1.4.4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install Linux system dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - run: bun install --frozen-lockfile
-      - name: Create signed updater configuration
-        run: bun run scripts/create-tauri-release-config.mjs
-      - uses: tauri-apps/tauri-action@v0.6.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          args: --config src-tauri/tauri.release.conf.json
-          tagName: ${{ needs.prepare.outputs.tag }}
-          releaseName: ${{ needs.prepare.outputs.name }}
-          releaseDraft: ${{ needs.prepare.outputs.draft }}
-          prerelease: ${{ needs.prepare.outputs.prerelease }}
-          uploadUpdaterJson: true
 
   android:
     name: Build and publish Android
@@ -158,9 +99,6 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       - name: Build Android bundles
         run: bun run tauri android build --ci
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       - name: Publish Android artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
