@@ -50,14 +50,14 @@ jobs:
     needs: prepare
     runs-on: ubuntu-24.04
     env:
-      VITE_KING_FUN_API_URL: ${{ vars.VITE_KING_FUN_API_URL }}
+      VITE_KING_FUN_API_URL: ${{ secrets.VITE_KING_FUN_API_URL }}
     steps:
       - uses: actions/checkout@v7.0.1
       - name: Require packaged-app API URL
         shell: bash
         run: |
           if [ -z "$VITE_KING_FUN_API_URL" ]; then
-            echo "::error::Set the VITE_KING_FUN_API_URL repository variable before publishing Android artifacts."
+            echo "::error::Set the VITE_KING_FUN_API_URL repository secret before publishing Android artifacts."
             exit 1
           fi
       - uses: oven-sh/setup-bun@v2.2.0

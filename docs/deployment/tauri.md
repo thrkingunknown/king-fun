@@ -20,7 +20,7 @@ VITE_KING_FUN_API_URL=https://YOUR_PROJECT.vercel.app/api
 The app appends `/v1/...` paths (status, content generation, creator, feedback/moderation). Keep the `/api` suffix.
 
 - **`.env.example`** includes this Vercel placeholder.
-- **CI/release workflows** require `vars.VITE_KING_FUN_API_URL` to contain the real deployed HTTPS API URL (including `/api`) before building packaged production apps.
+- **CI/release workflows** require the `VITE_KING_FUN_API_URL` repository secret to contain the real deployed HTTPS API URL (including `/api`) before building packaged production apps.
 
 ## HTTPS / Tauri transport behavior
 
@@ -41,7 +41,7 @@ Frontend bootstrap/splash (`frontend/index.html` + `frontend/src/main.tsx` `.boo
 ## GitHub workflows
 
 - **`.github/workflows/ci.yml`** — existing quality gates.
-- **`.github/workflows/tauri-android.yml`** — Android build on push/PR/manual (`ubuntu-24.04`, Bun, Rust Android targets, JDK 21, Android SDK/NDK, `tauri android init` if missing, `tauri android build --ci`, artifact upload). Requires `vars.VITE_KING_FUN_API_URL`.
+- **`.github/workflows/tauri-android.yml`** — Android build on push/PR/manual (`ubuntu-24.04`, Bun, Rust Android targets, JDK 21, Android SDK/NDK, `tauri android init` if missing, `tauri android build --ci`, artifact upload). Requires the `VITE_KING_FUN_API_URL` repository secret.
 - **`.github/workflows/tauri-release.yml`** — manual `workflow_dispatch` Android release to GitHub Releases. It publishes Android APK/AAB artifacts via `softprops/action-gh-release`.
 
 ## Updater & signing
@@ -52,7 +52,7 @@ The base Tauri config keeps updater artifacts disabled. Android artifacts are at
 
 | Name | Kind | Required now | Purpose |
 |---|---|---|---|
-| `VITE_KING_FUN_API_URL` | Repository variable (`vars`) | Required for packaged builds/releases | Full hosted API base including `/api`, e.g. `https://<real>.vercel.app/api`. |
+| `VITE_KING_FUN_API_URL` | Repository secret (`secrets`) | Required for packaged builds/releases | Full hosted API base including `/api`, e.g. `https://<real>.vercel.app/api`. |
 | `GITHUB_TOKEN` | Automatic secret | Yes for release publish | Release creation/upload (`permissions: contents: write`). Repo/org must allow Actions release writes. |
 | Android keystore secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) | Secrets | Required for signed Play-distributable/release APK/AAB signing flow you choose | `tauri-release.yml` restores a keystore to `src-tauri/gen/android/keystore.properties` **only if `ANDROID_KEYSTORE_BASE64` is set and Android project is initialized**. You may also configure signing in `src-tauri/gen/android` per your release process; do not commit keystores/passwords. |
 
@@ -63,7 +63,7 @@ The base Tauri config keeps updater artifacts disabled. Android artifacts are at
 `.github/dependabot.yml` runs weekly updates for Bun/npm manifests (`/`), Cargo (`/src-tauri`), and GitHub Actions (`/`). Review with normal quality gates.
 ## Android-first notes (current focus)
 
-- `tauri-android.yml` builds Android on commits/PRs/manual and requires `vars.VITE_KING_FUN_API_URL`.
+- `tauri-android.yml` builds Android on commits/PRs/manual and requires the `VITE_KING_FUN_API_URL` repository secret.
 - `tauri-release.yml` publishes APK/AAB outputs to the GitHub Release.
 - CI runs `bun run tauri android init --ci` when `src-tauri/gen/android` is missing. The generated Android project is ignored by git (`src-tauri/gen/`); review and commit Android project customizations only if you need stable manual Gradle/signing edits in-repo.
 - Android release signing: workflow restores a keystore/properties when `ANDROID_KEYSTORE_BASE64` is present. For production Play/App distribution, configure the signing method you trust (keystore secrets, Play App Signing/upload key, or repo-managed Gradle config) and keep secrets out of git.
@@ -71,7 +71,7 @@ The base Tauri config keeps updater artifacts disabled. Android artifacts are at
 
 ## Required config/secrets checklist (Android + Vercel API)
 
-1. Set repo variable `VITE_KING_FUN_API_URL=https://<real-vercel-project>.vercel.app/api`.
+1. Set repository secret `VITE_KING_FUN_API_URL=https://<real-vercel-project>.vercel.app/api`.
 2. Configure Android signing secrets if publishing signed APK/AAB artifacts.
 3. Ensure GitHub Actions has `contents: write` allowed for release publishing (`GITHUB_TOKEN`).
 4. Backend/CORS: Tauri HTTP plugin bypasses WebView CORS, but the Vercel API must still accept requests and enforce its own auth/rate limits. Verify `/api/v1/*` routes, HTTPS, and any origin checks for your deployment.
