@@ -22,9 +22,12 @@ The frontend dependency toolkit now includes Tailwind CSS 4, shadcn configured f
 ```sh
 # From repository root after dependency/override updates
 bun install --frozen-lockfile
+bun run clean:legacy-imposter
 bun run dev
 bun run check
 bun run build
+bun run install:e2e-browser
+bun run test:e2e
 bun run preview
 ```
 

@@ -48,9 +48,9 @@ The backend exposes only `/healthz`, `/v1/status`, and `/v1/content/generate` (u
 
 The Phase 6 release gates are documented in [`docs/phase-6-release-hardening.md`](docs/phase-6-release-hardening.md). `bun run check` runs static accessibility/security contracts, lint, typecheck, tests, a moderate-severity dependency advisory audit, the production build, and measured gzip bundle/secret/source-map checks. Manual WCAG 2.2 AA, real-device performance, license review, hosted security, and rollback/offline recovery exercises remain required before a production release.
 
-### Latest quality-run triage (2026-11-07)
+### Latest quality-run triage (2026-11-08)
 
-The latest user-provided Bun 1.4.4 run passed 117/117 release contracts and the separate Playwright suite passed 20/20 tests. That `bun run check` stopped at frontend typecheck: Oxlint reported one React Compiler immutability warning in the ambient canvas renderer and TypeScript reported nullable-context errors (TS18049). The current source extracts the imperative canvas renderer into a module-level lifecycle function and explicitly narrows its 2D context; the release-contract audit now covers that boundary. Local static validation passes 118/118 contracts and an isolated strict TypeScript compile. Full workspace lint/typecheck, unit tests, dependency audit, production build/budget and the browser suite still require an exact-revision run under Bun 1.4.4. See `verification.md` for the precise evidence.
+The latest user-provided Bun 1.4.4 log passes repository policy and all 154 release contracts. Frontend Oxlint reports two unused `randomIndex` callback parameters (removed in the current source); backend Oxlint is clean. TypeScript stops because frontend workspace packages are absent (`vite/client`, `vite`, `@vitejs/plugin-react`, and `@tailwindcss/vite` cannot resolve). A later Playwright attempt also stops before test discovery because `@playwright/test` is absent. A preceding browser run reported 19/20 passing; its remaining Imposter reveal test relied on all categories being selected by default but asserted fixed Animals metadata. The current E2E test selects only Animals, waits for the actual generation request, mocks the provider response across API host/path prefixes, and verifies press-to-reveal/release-to-conceal. The E2E command uses the workspace-pinned Playwright CLI instead of `bunx` downloading a temporary copy. `bun run check` and `bun run test:e2e` now perform a dependency preflight and print the frozen-install instruction when workspace packages are missing. On an existing checkout updated by overlay extraction, run `bun run clean:legacy-imposter`; then run `bun install --frozen-lockfile` from the repository root. Install Chromium with `bun run install:e2e-browser`. Current authoring-container checks pass 157/157 release contracts and parse 115 TypeScript/TSX files with zero syntax diagnostics using TypeScript 5.8.3. These static checks do not establish semantic type correctness. Native TypeScript 7 typecheck, unit tests, security audit, production build/budget and Playwright remain to be rerun after installation.
 
 ## Repository layout
 
@@ -91,6 +91,7 @@ Use Bun **1.4.4** from the repository root. The root lock's stale workspace-name
 
 ```sh
 bun install --frozen-lockfile
+bun run clean:legacy-imposter
 bun run dev
 ```
 
@@ -128,13 +129,13 @@ bun run typecheck
 bun run test
 bun run build
 bun run check
-bunx playwright install chromium
+bun run install:e2e-browser
 bun run test:e2e
 bun run storybook
 bun run build:storybook
 ```
 
-`bun run check` performs repository policy validation, release contracts, Oxlint, TypeScript project checks, frontend and backend Bun tests, a moderate-severity dependency advisory audit, a production Vite build, and measured transfer-budget checks. Install Chromium once with `bunx playwright install chromium`, then run `bun run test:e2e` for browser-level responsive and axe coverage. Run `bun run storybook` or `bun run build:storybook` to review the shared component catalogue. Configure local environment values by copying `.env.example` to `.env`; AI remains disabled by default.
+`bun run check` performs repository policy validation, release contracts, Oxlint, TypeScript project checks, frontend and backend Bun tests, a moderate-severity dependency advisory audit, a production Vite build, and measured transfer-budget checks. Install Chromium once with `bun run install:e2e-browser`, then run `bun run test:e2e` for browser-level responsive and axe coverage. Run `bun run storybook` or `bun run build:storybook` to review the shared component catalogue. Configure local environment values by copying `.env.example` to `.env`; AI remains disabled by default.
 
 ## Project documents
 
@@ -160,3 +161,8 @@ The responsive layout, theme tokens, shared component ownership, interactive amb
 ## Shared generated content and creator controls
 
 The optional Redis content cache, community content voting/moderation, and hidden creator-only Kailas mode are documented in [`docs/content-vault-and-creator-mode.md`](docs/content-vault-and-creator-mode.md). Configure the separate `CONTENT_VAULT_*` and server-only `KING_FUN_CREATOR_*` variables in `.env`; the features remain unavailable until their respective backend configuration is present.
+
+
+### Source archive note
+
+Release/source ZIPs must include root dotfiles that are part of the repository, especially `.env.example`. Never exclude all dotfiles as a packaging shortcut; include the safe template while continuing to exclude `.env`, provider secrets, generated output, dependency folders, and signing keys.

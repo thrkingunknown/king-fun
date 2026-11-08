@@ -1,3 +1,32 @@
+## 2026-11-08 — Quality-run fixes and dependency preflight
+
+### Fixed
+- Removed both Oxlint unused-parameter warnings in Imposter domain tests by using zero-parameter deterministic random callbacks.
+- Made the Imposter role-reveal browser test deterministic: it deselects every category except Animals, verifies exactly one category is selected, waits for the POST generation request, and asserts the category title/description against the actual request.
+- Broadened the mock route matcher to `**/v1/content/generate` so it works with same-origin and configured API origins regardless of an additional `/api` path prefix.
+- Changed the frontend E2E script from `bunx playwright` to the version-pinned workspace `playwright` binary. Added a root `bun run install:e2e-browser` command so Chromium installation uses the same pinned Playwright package.
+- Added a dependency preflight to `bun run check`, `bun run test:e2e`, and browser installation. Missing workspace packages now produce the explicit `bun install --frozen-lockfile` instruction instead of misleading module-resolution diagnostics.
+- Updated current README instructions and verification status to match the user-provided 2026-11-08 logs.
+
+### Verification
+- The user-provided log shows 154/154 release-contract checks passing, frontend lint with two warnings and zero errors, and backend lint clean. The current source removes those two warning sites.
+- The same log shows frontend typecheck could not resolve Vite/Tailwind/plugin packages and Playwright could not resolve `@playwright/test`; the project archive intentionally does not include `node_modules`. The dependency preflight now identifies this setup condition before running the pipeline.
+- The preceding browser attempt reported 19 passed / 1 failed. The current test removes the category-selection nondeterminism and explicitly waits for its mocked generation request. Playwright was not executable in this authoring environment because Bun, installed workspace dependencies, and Chromium are unavailable; no full pipeline or browser pass is claimed.
+- `node scripts/check-release-contracts.mjs`: **157/157 checks passed** on this source revision. TypeScript 5.8.3 syntax-only transpilation parsed **115 TypeScript/TSX files with zero syntax diagnostics**; six repository JSON manifests/configs and the modified MJS scripts also parse. This does not replace strict TypeScript 7 project typechecking.
+
+## 2026-11-08 — Imposter category-provider test regression fix
+
+### User-provided failure
+- `bun run check` stopped at the release-contract audit with the metadata-only Imposter bank contract failing. The updated archive has no `imposter-additional-words.ts`; however, extracting a ZIP over an older source directory does not remove obsolete files that are absent from the new archive. The added `bun run clean:legacy-imposter` command removes only that known obsolete file.
+- `bun run test:e2e` reported 19/20 passing. The Imposter role-reveal test clicked Start before a local backend/provider was available; built-in categories correctly have no offline word bank, so the application did not create a reveal phase.
+
+### Fix
+- The role-reveal E2E now intercepts `/api/v1/content/generate`, returns five deterministic words with 20 hints each, and asserts the selected `Animals` title/description were sent. The test still exercises the real category selection, client request path, round creation, and private reveal control.
+- Added a regression contract for the mocked category-scoped generation request and a one-purpose cleanup command for the legacy word bank.
+
+### Verification status
+- This authoring environment has no Bun installation or workspace `node_modules`; the Bun test/build/browser pipeline cannot be executed here. Run `bun run clean:legacy-imposter` once after overlaying the archive on an older checkout, then `bun run check` and `bun run test:e2e` on the updated source.
+
 ## 2026-11-07 — Latest ambient renderer lint/typecheck failure and correction
 
 ### User-provided exact-revision evidence before correction
@@ -1280,3 +1309,43 @@ Run `bun install --frozen-lockfile`, `bun run check`, and `bun run test:e2e` on 
 - Built-in Imposter categories intentionally require internet/provider availability when no content-vault result is available. This is the requested tradeoff for removing hardcoded answer banks.
 - Manual local word packs are the offline play path. Provider/network failure must fail clearly and must not fall back to a different category's answers.
 - This change does not add online multiplayer, server-side game sessions, player-name transmission, or changes to documented Imposter rules.
+
+
+## 2026-11-08 — Follow-up from the user's latest quality log
+
+### Fixes applied
+- The source archive omitted `.env.example` because hidden root files were excluded during packaging. The updated archive explicitly includes this allowlisted, secret-free template.
+- `scripts/check-release-contracts.mjs` now checks existence before reading `.env.example`, so an archive or checkout missing that file receives a clear failed contract rather than terminating with `ENOENT`.
+- The Imposter role-reveal test no longer searches for the exact hardcoded text `Animals`. It waits for lazy catalogue hydration, confirms the 30 all-ages built-in categories are present while the 18+ category remains gated, chooses the first displayed category while deselecting the rest, and verifies the generated-content request carries that category's displayed name and non-empty description.
+- Updated static release contracts and Bun regression tests to cover both corrections.
+
+### Verification boundary
+- Node release-contract audit and syntax/configuration checks are run on the updated source before packaging.
+- This authoring runtime has no Bun executable, installed workspace dependencies, or Playwright browser package, so a native `bun run check` and `bun run test:e2e` pass cannot be claimed here. The user's latest log is the evidence for 19/20 browser tests passing before this fix; the updated E2E must be rerun in the Bun workspace.
+
+## Final source/archive checks for the 2026-11-08 follow-up
+
+- `node scripts/check-release-contracts.mjs`: **158/158 passed** in the source workspace and again after extracting the final ZIP into a clean directory.
+- TypeScript/TSX syntax-only parse: **117 files, zero syntax diagnostics** using the globally available TypeScript transpiler. This is syntax validation, not the strict workspace typecheck.
+- Repository `.mjs` syntax checks passed; all **13 JSON files** parsed successfully.
+- ZIP integrity passed. Root `.env.example` is present in the archive; `.env`, signing keys, dependency folders and generated build/test output are excluded.
+- Negative-path check: temporarily removing `.env.example` makes the release audit report the named environment-template contract failure (and dependent environment-config check) with exit code 1; it no longer crashes with an uncaught `ENOENT`.
+- Bun 1.4.4, workspace dependencies, Playwright and Chromium are unavailable in this authoring runtime. The integrated `bun run check` and `bun run test:e2e` were therefore not executed here. The user's previous run reported 19/20 E2E tests passing before this latest correction; the updated test still needs native execution in the user's Bun workspace.
+
+
+# Verification update — Imposter selected-category nullability (2026-11-08)
+
+## User-provided failure
+
+- The user's Bun 1.4.4 run passed repository policy, 158 release contracts, and both frontend/backend Oxlint (zero warnings/errors), then failed frontend typecheck at `AppShell.tsx:656` because `selectImposterCategory()` returns `string | null` and the selected category history expected `string[]`.
+
+## Fix applied
+
+- `AppShell.tsx` now explicitly handles a null category-selection result before category lookup and round creation. The guard also narrows the value before it is appended to `recent['category:imposter']`.
+- Category pack lookup compares `String(pack.id)` with the narrowed selected ID, matching the string-based selector contract.
+- Added a release-contract check for the guard and its ordering relative to recent-category history storage.
+
+## Verification in this authoring runtime
+
+- Node release-contract audit: **159/159 passed** after the fix.
+- Bun and workspace dependencies are not installed in this authoring runtime. The full strict TypeScript project check, Bun tests, dependency audit, production build, and Playwright suite have not been rerun here; run them against this exact archive.

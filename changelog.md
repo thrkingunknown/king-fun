@@ -1,3 +1,30 @@
+## 2026-11-08 — Quality-run fixes and dependency preflight
+
+### Fixed
+- Removed both Oxlint unused-parameter warnings in Imposter domain tests by using zero-parameter deterministic random callbacks.
+- Made the Imposter role-reveal browser test deterministic: it deselects every category except Animals, verifies exactly one category is selected, waits for the POST generation request, and asserts the category title/description against the actual request.
+- Broadened the mock route matcher to `**/v1/content/generate` so it works with same-origin and configured API origins regardless of an additional `/api` path prefix.
+- Changed the frontend E2E script from `bunx playwright` to the version-pinned workspace `playwright` binary. Added a root `bun run install:e2e-browser` command so Chromium installation uses the same pinned Playwright package.
+- Added a dependency preflight to `bun run check`, `bun run test:e2e`, and browser installation. Missing workspace packages now produce the explicit `bun install --frozen-lockfile` instruction instead of misleading module-resolution diagnostics.
+- Updated current README instructions and verification status to match the user-provided 2026-11-08 logs.
+
+### Verification
+- The user-provided log shows 154/154 release-contract checks passing, frontend lint with two warnings and zero errors, and backend lint clean. The current source removes those two warning sites.
+- The same log shows frontend typecheck could not resolve Vite/Tailwind/plugin packages and Playwright could not resolve `@playwright/test`; the project archive intentionally does not include `node_modules`. The dependency preflight now identifies this setup condition before running the pipeline.
+- The preceding browser attempt reported 19 passed / 1 failed. The current test removes the category-selection nondeterminism and explicitly waits for its mocked generation request. Playwright was not executable in this authoring environment because Bun, installed workspace dependencies, and Chromium are unavailable; no full pipeline or browser pass is claimed.
+- `node scripts/check-release-contracts.mjs`: **157/157 checks passed** on this source revision. TypeScript 5.8.3 syntax-only transpilation parsed **115 TypeScript/TSX files with zero syntax diagnostics**; six repository JSON manifests/configs and the modified MJS scripts also parse. This does not replace strict TypeScript 7 project typechecking.
+
+## 2026-11-08 — Imposter provider-flow E2E and legacy archive cleanup
+
+### Fixed
+- Updated the Imposter role-reveal Playwright test to stub the LLM generation endpoint with a schema-shaped five-word response. The test asserts that the built-in selected category title and description are submitted, then verifies press-to-reveal and release-to-conceal behavior. It no longer expects a bundled/offline Imposter word bank or requires a live backend/provider.
+- Added `bun run clean:legacy-imposter`, an idempotent cleanup for the obsolete `frontend/src/content/imposter-additional-words.ts` file. This file can remain in an existing checkout when a new ZIP is extracted over the previous directory because archive extraction does not delete paths removed from a later archive.
+- Made the release-contract failure message include the exact cleanup command and added a contract requiring the deterministic, category-scoped Imposter E2E response.
+
+### Verification
+- `node scripts/check-release-contracts.mjs`: pending rerun for this revision.
+- Playwright E2E, Bun unit tests, typechecks, lint, security audit and production build remain to be run with the pinned Bun 1.4.4 workspace dependencies.
+
 ## 2026-11-08 — Imposter built-in categories now generate through provider order
 
 ### Changed
@@ -1098,3 +1125,25 @@ Release process:
 - Follow-up hardening: initialize the shared clock snapshot during subscription, outside React render, so restored countdowns display the correct elapsed time immediately rather than waiting for the first 80 ms tick.
 
 - Private-state follow-up: Hot Bomb answer drafts are keyed to the active holder/explosion, and Werewolf/Mafia local ballot selections include the night counter so selections cannot leak into a later cycle that reuses the same phase/index.
+
+
+## 2026-11-08 — Environment-template archive and Imposter browser-test fixes
+
+- Ensure source archives include root dotfiles such as `.env.example`; the previous archive command omitted hidden files, causing the release-contract audit to throw before reporting a result.
+- Make the release audit check `.env.example` existence before reading it. A missing template now produces the named contract failure instead of an uncaught `ENOENT` exception.
+- Replace the Imposter E2E's hardcoded `Animals` selector and exact description assertion with a wait for the lazily loaded 30-category all-ages catalogue (the one adult category remains hidden while 18+ mode is off), deterministic selection of the first available category, and assertions against the selected category metadata actually sent by the client.
+- Keep the generated-content mock category-scoped by echoing the request's category ID; the test remains independent of live providers and works when built-in category names/descriptions evolve.
+- Add regression coverage to the release-contract script and Bun test suite for safe environment-template handling and the data-driven Imposter E2E.
+
+### Follow-up verification — 2026-11-08
+- Node source release-contract audit: **158/158 passed** in the working tree and in a clean extraction of the final ZIP.
+- TypeScript/TSX syntax-only pass: **117 files, zero errors**; MJS syntax and 13 JSON files also passed.
+- Archive validation confirms `.env.example` is included and local `.env`/signing files are excluded.
+- Native Bun typecheck, unit tests, security audit, production build and Playwright rerun remain unverified in this authoring runtime.
+
+
+## 2026-11-08 — Imposter nullable category-selection type fix
+
+- Added an explicit fail-closed guard for the nullable result of `selectImposterCategory()` before looking up the pack or writing the selected ID into category-repeat history.
+- Normalized the pack ID to a string for the lookup, matching the selector's `string | null` contract and the selected-category ID list.
+- Added a release-contract regression check to ensure the null guard remains before category-history storage.

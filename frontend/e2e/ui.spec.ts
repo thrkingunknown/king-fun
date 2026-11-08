@@ -170,11 +170,94 @@ test.describe('KING-FUN responsive experience', () => {
   })
 
   test('Imposter role card begins revealing immediately on press and hides on release', async ({ page }) => {
+    // Built-in categories intentionally have no bundled/offline word bank. Keep
+    // this UI regression deterministic by stubbing the ordered LLM gateway with
+    // a schema-valid response; the test is about the private reveal interaction,
+    // not whether a live provider or deployed backend is available.
+    const generatedWords = ['Lantern', 'Compass', 'Pebble', 'Saffron', 'Telescope']
+    const wordHints = [
+      'a recognisable physical form', 'it can have different sizes', 'people may use it regularly',
+      'it can be made from different materials', 'it may be stored indoors', 'it has a familiar purpose',
+      'it can have a distinctive shape', 'it may be found in many places', 'it can be described by colour',
+      'it may be new or old', 'it can be part of a collection', 'it can be carried by a person',
+      'it may have a particular design', 'it can be seen and touched', 'it may be bought in a shop',
+      'it can be useful in everyday life', 'it may be kept in a home', 'it has recognisable features',
+      'it can be made in several styles', 'it is a concrete thing rather than an idea',
+    ]
+    let generationRequest: Record<string, unknown> | undefined
+    await page.route('**/v1/content/generate', async route => {
+      const requestBody = route.request().postDataJSON() as Record<string, unknown>
+      generationRequest = requestBody
+      const categoryId = String(requestBody.categoryId)
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          requestId: requestBody.requestId,
+          provider: 'cloudflare-workers-ai',
+          cacheHit: false,
+          items: generatedWords.map((word, index) => ({
+            id: `e2e-imposter-${index + 1}`,
+            text: word,
+            categoryId,
+            kind: 'word',
+            locale: 'en',
+            hints: wordHints,
+          })),
+        }),
+      })
+    })
+
+    await page.context().setOffline(false)
     await page.goto('/')
     await page.getByRole('button', { name: /Imposter/ }).click()
+
+    // Seed packs are loaded lazily. Wait for the built-in category catalogue
+    // before querying its contents, then select one category without hardcoding
+    // a particular title/description into this gameplay interaction test.
+    const categoryChoices = page.locator('.pack-browser .pack-choice')
+    await expect(categoryChoices.first()).toBeVisible({ timeout: 10_000 })
+    await expect.poll(() => categoryChoices.count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(30)
+    const categoryCount = await categoryChoices.count()
+
+    const chosenCategory = categoryChoices.first()
+    const chosenCategoryButton = chosenCategory.locator('button.pack-select')
+    const selectedCategoryName = (await chosenCategory.locator('.pack-main strong').innerText()).replace(/\s+/g, ' ').trim()
+    expect(selectedCategoryName).not.toBe('')
+
+    for (let index = 0; index < categoryCount; index += 1) {
+      const selectButton = categoryChoices.nth(index).locator('button.pack-select')
+      const selected = await selectButton.getAttribute('aria-pressed') === 'true'
+      if (index === 0 && !selected) {
+        await selectButton.click()
+        await expect(selectButton).toHaveAttribute('aria-pressed', 'true')
+      } else if (index > 0 && selected) {
+        await selectButton.click()
+        await expect(selectButton).toHaveAttribute('aria-pressed', 'false')
+      }
+    }
+    await expect(chosenCategoryButton).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator('.pack-browser .panel-heading span')).toHaveText('1 SELECTED')
+
+    const generationRequestPromise = page.waitForRequest(request =>
+      request.method() === 'POST' && request.url().includes('/v1/content/generate'),
+      { timeout: 10_000 },
+    )
     await page.getByRole('button', { name: /^Start game/i }).click()
+    const generationRequestObserved = await generationRequestPromise
+    expect(generationRequestObserved.url()).toContain('/v1/content/generate')
     const roleCard = page.locator('#imposter-role-reveal')
-    await expect(roleCard).toBeVisible()
+    await expect(roleCard).toBeVisible({ timeout: 10_000 })
+    expect(generationRequest).toMatchObject({
+      game: 'imposter',
+      itemKind: 'word',
+      categoryName: selectedCategoryName,
+      count: 5,
+    })
+    expect(typeof generationRequest?.categoryId).toBe('string')
+    expect(String(generationRequest?.categoryId).trim().length).toBeGreaterThan(0)
+    expect(typeof generationRequest?.categoryDescription).toBe('string')
+    expect(String(generationRequest?.categoryDescription).trim().length).toBeGreaterThan(0)
     const bounds = await roleCard.boundingBox()
     expect(bounds).not.toBeNull()
     await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2)

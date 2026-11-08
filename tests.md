@@ -126,6 +126,8 @@ The current implementation adds `src/domain/shared/validation.test.ts`, `src/dom
 
 ### Imposter
 
+- The role-reveal browser regression stubs `/api/v1/content/generate` with a schema-shaped five-word batch and asserts that the selected built-in category title/description reach the provider pipeline. This keeps the reveal test deterministic without restoring a bundled word bank or depending on a live provider/backend.
+
 - **TEST-IMP-001:** valid player roster starts a round; invalid roster is rejected.
 - **TEST-IMP-002:** civilian/special role counts match the configured ruleset.
 - **TEST-IMP-003:** the secret word and role assignment are committed atomically before the first reveal.
@@ -626,14 +628,14 @@ The first three tests are source-contract checks in `scripts/release-contracts.t
 
 - `frontend/src/components/ui/ui-utils.test.ts`: direct examples plus fast-check properties (500 generated cases each) for bounded progress and canonical duration formatting.
 - `scripts/release-contracts.test.ts`: 12-column layout, desktop setup split/mobile collapse, switch semantics, native HTML provider drag/drop plus keyboard reorder controls, command palette, Playwright/axe test presence, and theme/focus contracts.
-- `frontend/e2e/ui.spec.ts`: Playwright tests for the 27-game library, 320/360/390/620/768/1024/1440px overflow/reflow, setup player addition and invalid input, accessible light-theme switch, Ctrl+K command palette navigation, mode-selection and provider-order keyboard controls, and serious/critical axe scans on home, settings, and setup.
+- `frontend/e2e/ui.spec.ts`: Playwright tests for the 27-game library, 320/360/390/620/768/1024/1440px overflow/reflow, setup player addition and invalid input, the deterministic Animals-only Imposter LLM request and private role-card press/release interaction, accessible light-theme switch, Ctrl+K command palette navigation, mode-selection and provider-order keyboard controls, and serious/critical axe scans on home, settings, and setup.
 - `frontend/src/components/ui/stories/Controls.stories.tsx`: reviewable button/switch/status/progress/choice/empty-state components. Storybook configuration lives in `frontend/.storybook/`.
 
 Commands from the repository root (Bun 1.4.4):
 
 ```powershell
 bun run check
-bunx playwright install chromium
+bun run install:e2e-browser
 bun run test:e2e
 bun run storybook
 bun run build:storybook
@@ -803,3 +805,10 @@ The service-worker shell cache is now `king-fun-shell-v8` because the applicatio
 - Update shared seed-contract validation to compare seeded pack game IDs against the complete `GAME_IDS` registry (27 games), rather than the obsolete four-game expectation; retain the 30 Imposter category-pack assertion.
 - Fix the all-games Playwright smoke loop by waiting for the delayed `.setup-workspace` transition and first persisted player chip before calling the immediate `locator.count()` snapshot. Continue to assert each add/remove mutation with retrying `toHaveCount` assertions.
 - Add release-contract and Bun regression assertions for the renderer cleanup, per-game duplicate scope, full game-pack coverage, and setup-roster readiness. Native rerun evidence is required before marking these tests green.
+
+
+## 2026-11-08 — Environment archive and Imposter catalogue regression coverage
+
+- The release-contract audit verifies `.env.example` exists and is safe, but now handles an absent file as an ordinary failed contract instead of an uncaught filesystem exception.
+- The Imposter browser test waits for the lazily loaded category list, confirms at least the 31 built-in categories are present, selects one category deterministically, mocks the content-generation response using the request category ID, and verifies the selected title and non-empty description are transmitted.
+- The browser test does not hardcode a particular built-in category title or description, so catalogue copy changes cannot break an unrelated private role-reveal interaction test.

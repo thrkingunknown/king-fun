@@ -206,7 +206,7 @@ describe('Mystery Who rule hardening', () => {
   test('filters secret-word hints instead of blocking round creation', () => {
     const roster = players.slice(0, 3)
     const result = createImposterRound(roster, roster.map(player => player.id), 'Lantern', 'Objects', {
-      mode: 'classic', hints: [' lantern ', 'Light'], randomIndex: max => 0,
+      mode: 'classic', hints: [' lantern ', 'Light'], randomIndex: () => 0,
     })
     const mysticId = Object.entries(result.roles).find(([, role]) => role === 'Mystic')?.[0]
     expect(mysticId).toBeTruthy()
@@ -216,7 +216,7 @@ describe('Mystery Who rule hardening', () => {
   test('filters secret words hidden inside punctuation/longer hints', () => {
     const roster = players.slice(0, 3)
     const result = createImposterRound(roster, roster.map(player => player.id), 'Lantern', 'Objects', {
-      hints: ['A lantern! is useful at night', 'warm glow'], randomIndex: max => 1,
+      hints: ['A lantern! is useful at night', 'warm glow'], randomIndex: () => 1,
     })
     const mysticId = Object.entries(result.roles).find(([, role]) => role === 'Mystic')?.[0]
     expect(mysticId).toBeTruthy()

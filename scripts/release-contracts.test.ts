@@ -5,6 +5,21 @@ const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.ur
 const json = (path: string) => JSON.parse(read(path)) as Record<string, any>
 
 describe('Phase 6 release hardening contracts', () => {
+  test('release audit reports a missing environment template as a contract failure instead of crashing', () => {
+    const audit = read('scripts/check-release-contracts.mjs')
+    expect(audit).toContain("const envExample = envExampleExists ? read('.env.example') : ''")
+    expect(audit).toContain("record('Root environment template exists with AI disabled and blank operator credentials'")
+  })
+
+  test('Imposter role-reveal E2E waits for the deferred catalogue and derives category metadata from the selected UI choice', () => {
+    const browser = read('frontend/e2e/ui.spec.ts')
+    expect(browser).toContain("await expect(categoryChoices.first()).toBeVisible({ timeout: 10_000 })")
+    expect(browser).toContain('expect.poll(() => categoryChoices.count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(30)')
+    expect(browser).toContain('categoryName: selectedCategoryName')
+    expect(browser).toContain('generationRequest?.categoryDescription')
+    expect(browser).not.toContain("categoryName === 'Animals'")
+  })
+
   test('latest lint, seeded-content, and all-games E2E regressions stay fixed', () => {
     const ambient = read('frontend/src/components/ui/AmbientBackground.tsx')
     const canonical = read('frontend/src/domain/content/canonicalize.test.ts')

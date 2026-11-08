@@ -20,8 +20,8 @@
     "lint": "bun run --filter @king-fun/frontend lint && bun run --filter @king-fun/backend lint",
     "typecheck": "bun run --filter @king-fun/frontend typecheck && bun run --filter @king-fun/backend typecheck",
     "test": "bun test frontend/src backend/tests backend/security scripts",
-    "test:e2e": "bun run --filter @king-fun/frontend test:e2e",
-    "check": "bun run check:policy && bun run check:release-contracts && bun run lint && bun run typecheck && bun run test && bun run security:audit && bun run build",
+    "test:e2e": "bun run check:dependencies && bun run --filter @king-fun/frontend test:e2e",
+    "check": "bun run check:dependencies && bun run check:policy && bun run check:release-contracts && bun run lint && bun run typecheck && bun run test && bun run security:audit && bun run build",
     "start:backend": "bun --env-file=.env backend/dev.ts",
     "dev:backend:hot": "bun --env-file=.env --hot backend/dev.ts",
     "check:release-contracts": "bun run scripts/check-release-contracts.mjs",
@@ -34,7 +34,10 @@
     "tauri:android:dev": "tauri android dev",
     "tauri:android:build": "tauri android build --ci",
     "storybook": "bun run --filter @king-fun/frontend storybook",
-    "build:storybook": "bun run --filter @king-fun/frontend build:storybook"
+    "build:storybook": "bun run --filter @king-fun/frontend build:storybook",
+    "clean:legacy-imposter": "bun run scripts/clean-legacy-imposter-words.mjs",
+    "install:e2e-browser": "bun run check:dependencies && bun run --filter @king-fun/frontend install:e2e-browser",
+    "check:dependencies": "bun run scripts/check-workspace-dependencies.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4",

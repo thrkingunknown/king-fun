@@ -10,9 +10,10 @@
     "lint": "oxlint src vite.config.ts",
     "typecheck": "tsc -b",
     "test": "bun test src",
-    "test:e2e": "bunx playwright test --config playwright.config.ts",
+    "test:e2e": "playwright test --config playwright.config.ts",
     "storybook": "storybook dev -p 6006",
-    "build:storybook": "storybook build"
+    "build:storybook": "storybook build",
+    "install:e2e-browser": "playwright install chromium"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

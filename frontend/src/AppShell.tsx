@@ -558,7 +558,11 @@ export default function AppShell({ initialState, initialRevision, initialPersist
         const recentCategoryIds = recent['category:imposter'] ?? []
         const categoryWindow = categoryRepeatWindow(selectedCategoryIds.length)
         const selectedCategoryId = selectImposterCategory(selectedCategoryIds, recentCategoryIds, categoryWindow, secureRandomInteger)
-        const sourcePack = categoryPacks.find(pack => pack.id === selectedCategoryId)
+        if (!selectedCategoryId) {
+          setToast('No eligible Imposter category is available. Reopen setup and try again.')
+          return
+        }
+        const sourcePack = categoryPacks.find(pack => String(pack.id) === selectedCategoryId)
         if (!sourcePack) {
           setToast('A selected Imposter category is unavailable. Reopen setup and try again.')
           return
