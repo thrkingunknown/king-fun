@@ -120,11 +120,6 @@ jobs:
           version="${file#gradle-}"; version="${version%-bin.zip}"; version="${version%-all.zip}"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "file=${file}" >> "$GITHUB_OUTPUT"
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: ${{ steps.gradle.outputs.version }}
-          cache-disabled: false
       - name: Prefetch Gradle distribution
         shell: bash
         working-directory: src-tauri/gen/android

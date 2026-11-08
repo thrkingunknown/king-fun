@@ -360,6 +360,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
     const online = typeof navigator !== 'undefined' ? navigator.onLine : true
     const aiGame = (['imposter', 'guessup', 'truth-or-dare', 'never-have-i-ever', 'fake-it', 'fake-story', 'fact-or-fiction', 'wrong-answers-only', 'hot-bomb', 'hot-bomb-duel', 'whos-most-likely', 'would-you-rather', 'share-or-pass', 'challenge-20', 'tilt-it', 'letterburg', 'discussion-starter', 'who-am-i', 'ten-tangle', 'qupid', 'questions-for-love', 'a-or-b', 'reverse-singing'] as const).includes(game as any)
     const itemKind = kind === 'phrase' || kind === 'charade' ? 'charade' : kind === 'word' ? 'word' : kind === 'truth' ? 'truth' : kind === 'dare' ? 'dare' : kind === 'never-have-i-ever' ? 'statement' : kind === 'party-prompt' ? 'party-prompt' : null
+    const currentTurnPlayerNames = playerName?.trim() ? [playerName.trim()] : undefined
     if (online && aiGame && itemKind && itemKind !== 'word') {
       const categoryId = (packIds[0] ?? game).toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 64) || 'general'
       const sourcePack = contentPacks.find(pack => String(pack.id) === packIds[0] && pack.gameId === game)
@@ -370,7 +371,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
         ...seenIds.map(id => contentItems.find(item => item.id === id)?.text ?? aiGeneratedTextRef.current.get(id)),
       ].filter((v): v is string => Boolean(v)))].slice(-30)
       try {
-        const result = await generateAiContent({ game: game as AiGame, itemKind: itemKind as AiItemKind, categoryId, ...(sourcePack ? { categoryName: sourcePack.name, categoryDescription: sourcePack.description } : {}), count: 1, suitability, adultMode: save.adultMode, playerCount: save.players.length, playerNames: save.players.map(player => player.name), recentItems: recentTexts })
+        const result = await generateAiContent({ game: game as AiGame, itemKind: itemKind as AiItemKind, categoryId, ...(sourcePack ? { categoryName: sourcePack.name, categoryDescription: sourcePack.description } : {}), count: 1, suitability, adultMode: save.adultMode, playerCount: save.players.length, playerNames: save.players.map(player => player.name), ...(currentTurnPlayerNames ? { currentTurnPlayerNames } : {}), recentItems: recentTexts })
         const first = result.items[0]
         setToast(result.provider === 'content-vault'
           ? 'Loaded fresh content from the content vault.'
@@ -686,6 +687,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
             teamBName: config.teamBName,
             teamAPlayerIds,
             teamBPlayerIds,
+            deckB: selectedDeckB.map(item => item.text),
           })
           data = {
             ...round,
@@ -694,7 +696,10 @@ export default function AppShell({ initialState, initialRevision, initialPersist
             endsAt: null,
             seconds: config.durationSeconds,
             countdown: 3,
+            deckIds: selectedDeck.map(item => item.id),
+            deckBIds: selectedDeckB.map(item => item.id),
             deckItemIds: selectedDeck.map(item => item.id),
+            deckBItemIds: selectedDeckB.map(item => item.id),
             packIds: config.packIds,
             playerRoster: save.players,
             reports: [],
@@ -703,9 +708,11 @@ export default function AppShell({ initialState, initialRevision, initialPersist
             vibrationEnabled: config.vibrationEnabled,
             inputMode: config.inputMode,
           }
-          for (const item of selectedDeck) {
-            const key = contentQueueKey(item)
-            recent[key] = appendRecentContent(recent[key] ?? [], item.id, 20)
+          for (const item of [...selectedDeck, ...selectedDeckB]) {
+            if (!item.id.startsWith('ai:')) {
+              const key = contentQueueKey(item)
+              recent[key] = appendRecentContent(recent[key] ?? [], item.id, 20)
+            }
           }
         } catch (error) { setToast(error instanceof Error ? error.message : 'GuessUp could not be started.'); return }
         phase = 'ready'

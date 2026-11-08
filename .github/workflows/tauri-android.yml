@@ -94,22 +94,6 @@ jobs:
             fi
           fi
 
-      - name: Configure Android compiler warnings
-        shell: bash
-        run: |
-          {
-            echo 'android.javaCompile.suppressSourceTargetDeprecationWarning=true'
-            echo 'android.sync.suppressAGPWarnings=JAVA_COMPILE_DEPRECATED_SOURCE_TARGET'
-          } >> src-tauri/gen/android/gradle.properties
-          props=src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
-          if [ -f "$props" ]; then
-            if grep -q '^networkTimeout=' "$props"; then
-              sed -i 's/^networkTimeout=.*/networkTimeout=300000/' "$props"
-            else
-              echo 'networkTimeout=300000' >> "$props"
-            fi
-          fi
-
       - name: Read Gradle version
         id: gradle
         shell: bash
@@ -120,12 +104,6 @@ jobs:
           version="${file#gradle-}"; version="${version%-bin.zip}"; version="${version%-all.zip}"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "file=${file}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: ${{ steps.gradle.outputs.version }}
-          cache-disabled: false
 
       - name: Prefetch Gradle distribution
         shell: bash

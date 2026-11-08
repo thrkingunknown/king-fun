@@ -132,22 +132,51 @@ export function GuessUpGame({ active, players, patchActive, finish, restart, rep
   const nextTeam = () => {
     if (active.phase !== 'team-break') return
     const prepared = prepareGuessUpTeamB(round)
-    patchActive('ready', { ...prepared, countdown: 3 })
+    patchActive('ready', {
+      ...data,
+      ...prepared,
+      countdown: 3,
+      running: false,
+      endsAt: null,
+      seconds: prepared.durationSeconds ?? Number(data.durationSeconds ?? 60),
+      deck: Array.isArray(data.deck) ? data.deck : prepared.deck,
+      deckB: Array.isArray(data.deckB) && data.deckB.length ? data.deckB : prepared.deckB,
+      deckIds: data.deckIds,
+      deckBIds: data.deckBIds,
+      deckItemIds: data.deckItemIds,
+      deckBItemIds: data.deckBItemIds,
+      roundId: data.roundId,
+      reports: data.reports ?? [],
+      soundEnabled: data.soundEnabled,
+      musicEnabled: data.musicEnabled,
+      vibrationEnabled: data.vibrationEnabled,
+      inputMode: data.inputMode,
+      packIds: data.packIds,
+      playerRoster: data.playerRoster,
+      index: prepared.index,
+      indexB: prepared.indexB ?? 0,
+      activeTeam: 'B',
+    })
   }
   const markCard = useCallback((result: 'correct' | 'pass') => {
-    const actionKey = `${String(data.roundId ?? 'round')}:${round.activeTeam}:${cardIndex}`
-    const deadlineReached = Number.isFinite(round.endsAt) && Date.now() >= Number(round.endsAt)
-    if (!hasCard || !round.running || round.seconds <= 0 || deadlineReached || scoredActionRef.current === actionKey) return
+    const liveRound = active.data as unknown as GuessUpRoundState
+    const teamBDeck = active.data.activeTeam === 'B' && Array.isArray(active.data.deckB) && active.data.deckB.length
+    const liveIndex = teamBDeck ? Number(active.data.indexB ?? 0) : Number(active.data.index ?? 0)
+    const liveDeck = teamBDeck ? active.data.deckB as string[] : (Array.isArray(active.data.deck) ? active.data.deck as string[] : [])
+    const liveHasCard = liveDeck.length > 0 && liveIndex < liveDeck.length
+    const actionKey = `${String(active.data.roundId ?? 'round')}:${liveRound.activeTeam}:${liveIndex}`
+    const deadlineReached = Number.isFinite(liveRound.endsAt) && Date.now() >= Number(liveRound.endsAt)
+    if (!liveHasCard || !liveRound.running || liveRound.seconds <= 0 || deadlineReached || scoredActionRef.current === actionKey) return
     scoredActionRef.current = actionKey
     try {
-      const next = scoreGuessUpCard(round, result)
+      const next = scoreGuessUpCard(liveRound, result)
       setLastAction(result)
       playFeedback(result)
-      patchActive('playing', next as unknown as Record<string, any>)
+      patchActive('playing', { ...active.data, ...next } as unknown as Record<string, any>)
     } catch {
       scoredActionRef.current = null
     }
-  }, [cardIndex, data.roundId, hasCard, patchActive, playFeedback, round])
+  }, [active.data, patchActive, playFeedback])
   useEffect(() => {
     markCardRef.current = markCard
   }, [markCard])

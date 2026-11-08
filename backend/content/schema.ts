@@ -28,7 +28,7 @@ const pairs: Record<string, readonly ItemKind[]> = {
   'a-or-b': ['party-prompt'],
   'reverse-singing': ['party-prompt'],
 }
-const requestFields = new Set(['schemaVersion', 'requestId', 'game', 'itemKind', 'categoryId', 'categoryName', 'categoryDescription', 'locale', 'suitability', 'adultMode', 'count', 'playerCount', 'playerNames', 'recentItems'])
+const requestFields = new Set(['schemaVersion', 'requestId', 'game', 'itemKind', 'categoryId', 'categoryName', 'categoryDescription', 'locale', 'suitability', 'adultMode', 'count', 'playerCount', 'playerNames', 'currentTurnPlayerNames', 'recentItems'])
 const textLimits: Record<ItemKind, number> = { word: 90, charade: 100, truth: 260, dare: 260, statement: 240, category: 64, 'party-prompt': 280 }
 export const canonicalizeGeneratedText = (value: string) => value.normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 const canonical = canonicalizeGeneratedText
@@ -54,6 +54,7 @@ export function validateGenerateInput(value: unknown): GenerateInput {
   if (!Number.isInteger(v.count) || Number(v.count) < 1 || Number(v.count) > 5) invalid('Count must be between 1 and 5.')
   if (v.playerCount !== undefined && (!Number.isInteger(v.playerCount) || Number(v.playerCount) < 2 || Number(v.playerCount) > 32)) invalid('Invalid player count.')
   if (v.playerNames !== undefined && (!Array.isArray(v.playerNames) || v.playerNames.length < 2 || v.playerNames.length > 32 || v.playerNames.some(name => typeof name !== 'string' || name.trim().length < 1 || name.length > 80 || hasControlCharacters(name)))) invalid('Invalid player names.')
+  if (v.currentTurnPlayerNames !== undefined && (!Array.isArray(v.currentTurnPlayerNames) || v.currentTurnPlayerNames.length > 8 || v.currentTurnPlayerNames.some(name => typeof name !== 'string' || name.trim().length < 1 || name.length > 80 || hasControlCharacters(name)))) invalid('Invalid current-turn player names.')
   if (!Array.isArray(v.recentItems) || v.recentItems.length > 30 || v.recentItems.some(item => typeof item !== 'string' || item.length > 260 || hasControlCharacters(item))) invalid('Invalid recent-item exclusions.')
   return v as unknown as GenerateInput
 }

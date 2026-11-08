@@ -151,6 +151,8 @@ export type AiContentRequest = {
   recentItems?: string[]
   playerCount?: number
   playerNames?: string[]
+  /** Names of player(s) whose turn it is now — prompt must target them, not others. */
+  currentTurnPlayerNames?: string[]
   locale?: string
   suitability?: 'general' | 'teen' | 'adult'
   /** Explicit 18+ mode flag from settings; required for adult suitability. */
@@ -177,7 +179,7 @@ export async function generateAiContent(input: AiContentRequest, signal?: AbortS
     const key = provider === 'cloudflare-workers-ai' ? undefined : keys[provider]
     if (provider !== 'cloudflare-workers-ai' && !key) continue
     try {
-      const response = await apiFetch(`${apiBase}/v1/content/generate`, { method: 'POST', signal: signal ?? null, cache: 'no-store', headers: { 'content-type': 'application/json', 'x-provider-id': provider, ...(key ? { 'x-provider-key': key } : {}) }, body: JSON.stringify({ schemaVersion: 1, requestId: crypto.randomUUID(), game: input.game, itemKind: input.itemKind, categoryId: input.categoryId, ...(input.categoryName ? { categoryName: input.categoryName.slice(0, 120) } : {}), ...(input.categoryDescription ? { categoryDescription: input.categoryDescription.slice(0, 280) } : {}), locale: input.locale ?? 'en', suitability, adultMode, count: Math.min(5, Math.max(1, input.count ?? 5)), ...(input.playerCount ? { playerCount: input.playerCount } : {}), ...(input.playerNames?.length ? { playerNames: input.playerNames.slice(0, 32).map(name => name.trim().slice(0, 80)) } : {}), recentItems: (input.recentItems ?? []).slice(-30) }) })
+      const response = await apiFetch(`${apiBase}/v1/content/generate`, { method: 'POST', signal: signal ?? null, cache: 'no-store', headers: { 'content-type': 'application/json', 'x-provider-id': provider, ...(key ? { 'x-provider-key': key } : {}) }, body: JSON.stringify({ schemaVersion: 1, requestId: crypto.randomUUID(), game: input.game, itemKind: input.itemKind, categoryId: input.categoryId, ...(input.categoryName ? { categoryName: input.categoryName.slice(0, 120) } : {}), ...(input.categoryDescription ? { categoryDescription: input.categoryDescription.slice(0, 280) } : {}), locale: input.locale ?? 'en', suitability, adultMode, count: Math.min(5, Math.max(1, input.count ?? 5)), ...(input.playerCount ? { playerCount: input.playerCount } : {}), ...(input.playerNames?.length ? { playerNames: input.playerNames.slice(0, 32).map(name => name.trim().slice(0, 80)) } : {}), ...(input.currentTurnPlayerNames?.length ? { currentTurnPlayerNames: input.currentTurnPlayerNames.slice(0, 8).map(name => name.trim().slice(0, 80)).filter(Boolean) } : {}), recentItems: (input.recentItems ?? []).slice(-30) }) })
       const body = await readJsonResponse(response) as { items?: AiGeneratedItem[]; cacheHit?: boolean; provider?: string; error?: { code?: string; message?: string; retryable?: boolean } }
       if (!response.ok || !Array.isArray(body.items)) {
         lastError = body.error?.message ?? `Provider request failed (${response.status}).`
