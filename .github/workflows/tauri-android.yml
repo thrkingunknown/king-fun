@@ -110,28 +110,62 @@ jobs:
             fi
           fi
 
+      - name: Read Gradle version
+        id: gradle
+        shell: bash
+        run: |
+          props=src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
+          url=$(grep '^distributionUrl=' "$props" | sed 's/^distributionUrl=//' | sed 's#\\:#:#g' | sed 's#\\/#/#g')
+          file=$(basename "$url")
+          version="${file#gradle-}"; version="${version%-bin.zip}"; version="${version%-all.zip}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "file=${file}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ steps.gradle.outputs.version }}
+          cache-disabled: false
+
       - name: Prefetch Gradle distribution
         shell: bash
         working-directory: src-tauri/gen/android
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GRADLE_VERSION: ${{ steps.gradle.outputs.version }}
+          GRADLE_FILE: ${{ steps.gradle.outputs.file }}
         run: |
           set -euo pipefail
           props=gradle/wrapper/gradle-wrapper.properties
-          url=$(grep '^distributionUrl=' "$props" | sed 's/^distributionUrl=//' | sed 's#\\:#:#g' | sed 's#\\/#/#g')
-          file=$(basename "$url")
+          file="$GRADLE_FILE"
+          version="$GRADLE_VERSION"
           cache_dir="$RUNNER_TEMP/gradle-dist"
           mkdir -p "$cache_dir"
           zip="$cache_dir/$file"
+          find_cached() {
+            local found
+            found=$(find "$HOME/.gradle/wrapper/dists" -type f -name "$file" 2>/dev/null | head -n 1 || true)
+            if [ -n "$found" ]; then cp "$found" "$zip"; return 0; fi
+            found=$(find /usr/share/gradle -type f -name "$file" 2>/dev/null | head -n 1 || true)
+            if [ -n "$found" ]; then cp "$found" "$zip"; return 0; fi
+            return 1
+          }
           ok=1
-          if [ -f "$zip" ]; then ok=0; fi
+          if [ -f "$zip" ] || find_cached; then ok=0; fi
           if [ "$ok" -ne 0 ]; then
-            version="${file#gradle-}"; version="${version%-bin.zip}"; version="${version%-all.zip}"
+            echo "Downloading Gradle distribution via gh: gradle/gradle-distributions v${version} ${file}"
+            if gh release download "v${version}" --repo gradle/gradle-distributions --pattern "$file" --dir "$cache_dir" --clobber 2>/dev/null; then
+              ok=0
+            fi
+          fi
+          if [ "$ok" -ne 0 ]; then
             for candidate in \
               "https://github.com/gradle/gradle-distributions/releases/download/v${version}/${file}" \
               "https://downloads.gradle.org/distributions/${file}" \
-              "$url"
+              "https://services.gradle.org/distributions/${file}"
             do
               echo "Downloading Gradle distribution: $candidate"
-              if curl -fL --retry 4 --retry-delay 8 --connect-timeout 30 --max-time 900 -o "$zip.part" "$candidate"; then
+              if curl -fL --retry 2 --retry-delay 10 --connect-timeout 30 --max-time 900 -o "$zip.part" "$candidate" 2>/dev/null; then
                 mv "$zip.part" "$zip"
                 ok=0
                 break
@@ -139,20 +173,22 @@ jobs:
               rm -f "$zip.part"
             done
           fi
+          if [ "$ok" -ne 0 ] && find_cached; then ok=0; fi
           if [ "$ok" -ne 0 ]; then
-            echo "::error::Failed to download Gradle distribution from GitHub/releases.gradle.org/services.gradle.org."
-            exit 1
-          fi
-          escaped="file\\:${zip//\//\\/}"
-          if grep -q '^distributionUrl=' "$props"; then
-            sed -i "s#^distributionUrl=.*#distributionUrl=${escaped}#" "$props"
+            echo "::warning::Could not obtain Gradle ${version} zip; attempting wrapper/provisioned Gradle with extended timeout."
           else
-            echo "distributionUrl=${escaped}" >> "$props"
+            escaped="file\\:${zip//\//\\/}"
+            if grep -q '^distributionUrl=' "$props"; then
+              sed -i "s#^distributionUrl=.*#distributionUrl=${escaped}#" "$props"
+            else
+              echo "distributionUrl=${escaped}" >> "$props"
+            fi
           fi
-          for attempt in 1 2 3; do
+          export GRADLE_OPTS="${GRADLE_OPTS:-} -Dorg.gradle.wrapper.networkTimeout=300000"
+          for attempt in 1 2 3 4 5; do
             if ./gradlew --version; then exit 0; fi
             echo "Gradle wrapper verification attempt ${attempt} failed; retrying..."
-            sleep $((attempt * 10))
+            sleep $((attempt * 15))
           done
           exit 1
 
