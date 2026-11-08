@@ -102,6 +102,25 @@ jobs:
             echo 'android.javaCompile.suppressSourceTargetDeprecationWarning=true'
             echo 'android.sync.suppressAGPWarnings=JAVA_COMPILE_DEPRECATED_SOURCE_TARGET'
           } >> src-tauri/gen/android/gradle.properties
+          props=src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
+          if [ -f "$props" ]; then
+            if grep -q '^networkTimeout=' "$props"; then
+              sed -i 's/^networkTimeout=.*/networkTimeout=300000/' "$props"
+            else
+              echo 'networkTimeout=300000' >> "$props"
+            fi
+          fi
+      - name: Prefetch Gradle distribution
+        shell: bash
+        working-directory: src-tauri/gen/android
+        run: |
+          for attempt in 1 2 3; do
+            if ./gradlew --version; then exit 0; fi
+            echo "Gradle distribution prefetch attempt ${attempt} failed; retrying..."
+            sleep $((attempt * 15))
+          done
+          echo "::error::Failed to download Gradle distribution after 3 attempts."
+          exit 1
       - name: Restore Android signing keystore
         if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
         shell: bash
@@ -120,7 +139,14 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
       - name: Build Android bundles
-        run: bun run tauri android build --ci
+        shell: bash
+        run: |
+          for attempt in 1 2; do
+            if bun run tauri android build --ci; then exit 0; fi
+            echo "Android build attempt ${attempt} failed; retrying once..."
+            sleep 20
+          done
+          exit 1
       - name: Publish Android artifacts to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
