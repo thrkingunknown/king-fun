@@ -97,7 +97,7 @@ function promptFor(input: GenerateInput): string {
   const constraints = input.itemKind === 'category'
     ? 'Create category metadata only: each text is a short distinct category name (2–40 characters), each description is a useful one-sentence explanation (10–180 characters), and emoji is one representative emoji. Do not generate words or other game prompts.'
     : input.game === 'imposter' && input.itemKind === 'word'
-      ? 'Each word must have exactly 20 distinct, concise, indirect hints related to that secret word’s recognizable traits, use, setting, or associations. Every hint must be at most 2 words (1-2 words total), subtle rather than a giveaway, and never a complete sentence. Prefer concrete clues (e.g. where found, what it does, what it’s like) over vague filler. No hint may contain the answer as a complete token sequence, use a trivial inflection, or directly identify it.'
+      ? 'For each secret word, generate hints specific to THAT word (not the category). Provide 8-12 hints per word. Each hint must be 1-2 words, indirect, and related to that secret word’s recognizable traits, use, setting, appearance, sound, behavior, or associations. Hints must help a Mystic blend in without revealing the answer. Never use the answer, a trivial inflection, rhyming giveaway, or a complete sentence.'
       : input.itemKind === 'party-prompt'
         ? `Party prompt constraints: ${partyFormat}`
         : 'Set hints to an empty array for every item.'

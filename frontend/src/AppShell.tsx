@@ -590,8 +590,8 @@ export default function AppShell({ initialState, initialRevision, initialPersist
           return
         }
         if (config.imposter?.mysticHintsEnabled !== false && (!word.hints || word.hints.length === 0)) {
-          setToast('This word has no usable Mystic hints. Edit the custom category and add at least one hint, or turn Mystic Hint off.')
-          return
+          // Built-in/local words may not have per-word hints; Mystics still play using role/category context.
+          word = { ...word, hints: [] }
         }
         const shuffled = secureShuffle(save.players)
         const categoryLabel = gameContentPacks.find(pack => pack.id === word.packId)?.name ?? word.categoryId.replace(/[-_]+/g, ' ').replace(/\b\w/g, character => character.toUpperCase())

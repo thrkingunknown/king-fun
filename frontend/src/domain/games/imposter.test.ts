@@ -188,18 +188,24 @@ describe('Mystery Who rule hardening', () => {
     expect(() => createImposterRound(oversized, oversized.map(player => player.id), 'Lantern')).toThrow('3 and 20')
   })
 
-  test('rejects a Mystic hint that reveals the secret word', () => {
+  test('filters secret-word hints instead of blocking round creation', () => {
     const roster = players.slice(0, 3)
-    expect(() => createImposterRound(roster, roster.map(player => player.id), 'Lantern', 'Objects', {
-      mode: 'classic', hints: [' lantern ', 'Light'],
-    })).toThrow('must not disclose the secret word')
+    const result = createImposterRound(roster, roster.map(player => player.id), 'Lantern', 'Objects', {
+      mode: 'classic', hints: [' lantern ', 'Light'], randomIndex: max => 0,
+    })
+    const mysticId = Object.entries(result.roles).find(([, role]) => role === 'Mystic')?.[0]
+    expect(mysticId).toBeTruthy()
+    expect(result.hints[mysticId!]).toBe('Light')
   })
 
-  test('rejects secret words hidden inside punctuation or longer hints', () => {
+  test('filters secret words hidden inside punctuation/longer hints', () => {
     const roster = players.slice(0, 3)
-    expect(() => createImposterRound(roster, roster.map(player => player.id), 'Lantern', 'Objects', {
-      hints: ['A lantern! is useful at night'],
-    })).toThrow('must not disclose the secret word')
+    const result = createImposterRound(roster, roster.map(player => player.id), 'Lantern', 'Objects', {
+      hints: ['A lantern! is useful at night', 'warm glow'], randomIndex: max => 1,
+    })
+    const mysticId = Object.entries(result.roles).find(([, role]) => role === 'Mystic')?.[0]
+    expect(mysticId).toBeTruthy()
+    expect(result.hints[mysticId!]).toBe('warm glow')
   })
 
   test('rejects more than twenty hints and canonicalizes duplicate hint strings', () => {

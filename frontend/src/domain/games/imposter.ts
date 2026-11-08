@@ -241,12 +241,11 @@ export function createImposterRound(
   const availableHints = [...uniqueHints.values()]
     .map(hint => hint.trim().split(/\s+/).slice(0, 2).join(' '))
     .filter(Boolean)
+  // If hints are provided but all are unusable, fall back to no-hint play rather than blocking.
   const canonicalWord = canonicalizeContentText(word)
-  if (availableHints.some(hint => canonicalizeContentText(hint) === canonicalWord || containsSecretWord(hint, word))) {
-    throw new TypeError('A Mystic hint must not disclose the secret word.')
-  }
+  const safeHints = availableHints.filter(hint => canonicalizeContentText(hint) !== canonicalWord && !containsSecretWord(hint, word))
   const uniqueShortHints = new Map<string, string>()
-  for (const hint of availableHints) {
+  for (const hint of safeHints) {
     const key = canonicalizeContentText(hint)
     if (key && !uniqueShortHints.has(key)) uniqueShortHints.set(key, hint)
   }

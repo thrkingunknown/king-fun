@@ -14,7 +14,7 @@ describe('bundled offline game content', () => {
     }
   })
 
-  test('ships all 30 Mystery Who category banks with category-specific words and local hints', () => {
+  test('ships all 30 Mystery Who category banks with category-specific words', () => {
     const imposterPacks = SEEDED_PACKS.filter(pack => pack.gameId === 'imposter')
     const categoryPacks = imposterPacks.filter(pack => pack.suitability !== 'adult')
     expect(categoryPacks).toHaveLength(IMPOSTER_CATEGORY_BANKS.length)
@@ -22,7 +22,7 @@ describe('bundled offline game content', () => {
     for (const pack of categoryPacks) {
       const entries = SEEDED_CONTENT.filter(item => item.packId === pack.id)
       expect(entries).toHaveLength(60)
-      expect(entries.every(item => item.kind === 'word' && Array.isArray(item.hints) && item.hints.length >= 1 && item.hints.length <= 20)).toBe(true)
+      expect(entries.every(item => item.kind === 'word')).toBe(true)
     }
     const categoryIds = new Set(categoryPacks.map(pack => pack.id))
     const words = SEEDED_CONTENT.filter(item => item.gameId === 'imposter' && categoryIds.has(item.packId)).map(item => canonicalizeContentText(item.text))
