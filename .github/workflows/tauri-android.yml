@@ -1,0 +1,76 @@
+name: Tauri Android build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tauri-android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Build Android
+    runs-on: ubuntu-24.04
+    env:
+      VITE_KING_FUN_API_URL: ${{ vars.VITE_KING_FUN_API_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Require packaged-app API URL
+        shell: bash
+        run: |
+          if [ -z "$VITE_KING_FUN_API_URL" ]; then
+            echo "::error::Set the VITE_KING_FUN_API_URL repository variable before building Tauri packages."
+            exit 1
+          fi
+
+      - name: Install pinned Bun
+        uses: oven-sh/setup-bun@v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: sdkmanager --install "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Initialize Android project if missing
+        shell: bash
+        run: |
+          if [ ! -d src-tauri/gen/android ]; then
+            bun run tauri android init --ci
+          fi
+
+      - name: Build Android bundles
+        run: bun run tauri android build --ci
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: tauri-android
+          if-no-files-found: error
+          path: |
+            src-tauri/gen/android/**/outputs/**
+            src-tauri/gen/android/**/*.apk
+            src-tauri/gen/android/**/*.aab

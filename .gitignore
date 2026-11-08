@@ -1,0 +1,34 @@
+# Dependencies and generated build output
+node_modules/
+**/node_modules/
+frontend/dist/
+dist/
+dist-ssr/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+.dev.vars*
+
+# Logs and local tooling
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/

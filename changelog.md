@@ -1,0 +1,1087 @@
+## 2026-11-07 — Ambient renderer compiler/typecheck remediation
+
+### Fixed
+- Moved the imperative canvas renderer into a module-level `mountAmbientScene` lifecycle boundary. Mutable canvas dimensions, pointer state, rotation, ripples, timers and animation-frame handles now belong to the renderer instance rather than the React component/effect scope; React Compiler no longer treats those renderer locals as render-owned mutable values.
+- Split canvas lookup from context acquisition and narrowed the nullable `getContext('2d')` result once before passing the explicitly typed `CanvasRenderingContext2D` into drawing callbacks. This removes the reported TS18049 errors without non-null assertions or weakening strict TypeScript settings.
+- Added a release-contract and Bun regression check requiring the renderer boundary and explicit context narrowing.
+- Preserved existing renderer behavior, 30fps/DPR caps, pointer interaction, tap ripples, tab-visibility suspension, reduced-motion pause and cleanup.
+
+### Verification
+- The user-provided Bun 1.4.4 log reported 117/117 release contracts, one frontend React Compiler warning, 25 frontend TS18049 diagnostics, clean backend lint, and **20/20 Playwright tests passed**. The full `check` stopped at frontend typecheck, so unit tests, dependency audit and production build were not reached in that run.
+- In this authoring environment, `node scripts/check-release-contracts.mjs` passes after adding the renderer regression (118 checks); an isolated strict TypeScript 5.8.3 compile of `AmbientBackground.tsx` with minimal React/JSX declarations passes. Native Oxlint, the workspace TypeScript 7 project builds, Bun unit tests, dependency audit, production Vite build/budget, and Playwright are not available here and remain exact-revision verification gates.
+
+## 2026-11-07 — Full-check and browser-smoke triage
+
+### Fixed
+- Removed the ambient renderer's mutable `disposed` closure flag. Cleanup now cancels the pending animation frame and unregisters all listeners; no React Compiler lint rule is suppressed.
+- Corrected the seed-catalogue duplicate contract to detect duplicates within each game's selectable pool. Reusing a word across different game IDs is valid and does not cause cross-game selection collisions.
+- Corrected the shared content-pack contract to require exact coverage of the full 27-game `GAME_IDS` registry instead of the obsolete four-game count; all 30 Imposter category packs remain required.
+- Fixed the 23-game Playwright smoke loop race: the home card click starts a deliberate transition before setup renders, so the test now waits for `.setup-workspace` and the loaded player roster before reading `locator.count()`.
+- Added source release contracts and Bun regression coverage for these failures.
+
+### Verification status
+- User-provided Bun 1.4.4 log: repository policy and 113 release contracts passed; backend lint and both typechecks passed; frontend lint emitted one React Compiler immutability warning; unit tests reported 213 passed / 2 failed; Playwright reported 19 passed / 1 failed. The failures were stale/global catalogue assumptions and an E2E setup-transition race.
+- Post-fix source checks and targeted runtime checks are recorded in `verification.md`. Native `bun run check` and `bun run test:e2e` must be rerun on Bun 1.4.4 before claiming final pipeline or browser-suite success.
+
+## 2026-11-07 — Visual refresh, persistent theme polish, and interactive ambient 3D scene
+
+### Improved
+- Added a no-dependency projected 3D wire-sphere background with 30fps capped rendering, pointer-driven parallax, proximity highlights, orbital satellites, and tap ripples. The canvas is decorative, pointer-transparent, and suspended when the tab is hidden.
+- Added an accessible header control to pause/resume the ambient scene. System and in-app reduced-motion preferences pause the renderer; reduced-motion users cannot accidentally re-enable decorative animation from the header.
+- Added a dedicated visual-refresh stylesheet for a tighter Vercel/shadcn-inspired surface system: clearer navigation states, restrained glass surfaces, more consistent borders/radii, cleaner game cards, sharper button interactions, upgraded switches, and more legible light/dark home surfaces.
+- Refined the header theme control and kept the theme preference backed by the existing Save/IndexedDB flow and reflected in `document.documentElement.dataset.theme` and the browser theme-color meta tag.
+- Added browser acceptance for synchronized header/Settings theme controls, an IndexedDB persistence barrier before reload, ambient pointer-event feedback, pause/resume, and both system/in-app reduced-motion behavior; added release-contract assertions for the 3D projection, event handling, and visual fallbacks.
+- Corrected the ambient mesh paths so latitude rings close while meridians remain open; this removes artificial end-to-end chords from the projected geometry.
+- Synchronized root/body overscroll surfaces, native control colour-scheme, the initial HTML theme colour, and browser theme-colour meta during IndexedDB-first boot and every subsequent appearance change.
+- Added NFR-UX-004 to formally specify the interactive scene's input, rendering, and accessibility boundaries.
+- No dependencies, package manifests, lockfiles, game rules, game state, randomness, storage schema, or API behavior changed.
+
+### Verification
+- `node scripts/check-release-contracts.mjs`: **113/113 checks passed** after the interaction, theme-colour, and geometry refinements.
+- Native Bun 1.4.4 lint/typecheck/unit/security/build and Playwright/axe have not been executed in this authoring environment. Run `bun run check` and `bun run test:e2e` against this exact archive before release sign-off.
+
+
+
+## 2026-11-07 — Reverse Singing microphone policy correction
+
+### Fixed
+- Changed the hosted frontend Permissions Policy from `microphone=()` to `microphone=(self)`. Reverse Singing can now reach the browser's user-initiated microphone permission flow; camera, geolocation and other unrelated capabilities remain restricted.
+- Updated the release-contract audit and Bun security-header regression test to require same-origin microphone access, preventing the earlier contradictory policy from passing the source audit.
+- Updated the current frontend deployment guide and current service-worker test inventory to cache namespace v8.
+
+### Verification
+- The pre-patch user-provided log showed 109/109 source release contracts passing, clean frontend/backend Oxlint, and both TypeScript checks passing. Its visible excerpt ended during unit-test output and did not contain the final test/audit/build result.
+- After this patch, `node scripts/check-release-contracts.mjs` is rerun in the authoring environment. Native `bun run check` and browser microphone permission acceptance still require execution on Bun 1.4.4 with installed workspace dependencies.
+
+## 2026-11-06 — Final native-test and home/settings accessibility fixes
+
+### Fixed
+- Corrected the service-worker cache-version unit test to validate the worker's explicit cache identifier. The immediate follow-up changed the final shell graph cache to `king-fun-shell-v7`; current source, unit/integration fixtures, release audit and frontend deployment documentation all agree on v7.
+- Removed the conditional disabled state from the primary home CTA. The four-game registry is fixed by product scope; the CTA now uses the first configured game with the canonical Imposter fallback, so initial game-list timing cannot dim an otherwise valid primary action.
+- Added explicit, theme-specific high-contrast styling to the primary home CTA: lime/dark ink in dark mode and dark green/white in light mode. This avoids disabled-opacity or inherited token combinations that were producing a failing contrast ratio.
+- Added a high-specificity, opaque white foreground for the four hero-token labels so their contrast does not depend on stylesheet import order or inherited text colours.
+- Made the provider-row Playwright test wait for the lazy Settings screen, its labelled provider list, and both provider rows before measuring responsive visibility. This removes the lazy-screen hydration race while preserving the actual visibility and overflow assertions at 390, 620, 768 and 1024 px.
+- Added explicit Playwright readiness/contrast assertions for the home CTA and hero-token labels, plus a release-contract regression for the home CTA, theme-specific colours, and lazy provider-list wait.
+
+### Verification status
+- User-provided native Bun 1.4.4 evidence before these changes: 82 release contracts passed; frontend/backend Oxlint were clean; both typechecks passed; 194/195 unit tests passed with only the stale service-worker source-literal assertion failing. The user's separate Playwright run reported 11/13 passing, with the provider-row test seeing zero rows before the lazy Settings screen had rendered and the axe scan reporting low contrast for hero-token text and the home CTA.
+- The source fixes above address those specific failures. Native Bun unit/E2E/build reruns are still required; no new green native pipeline is claimed from this authoring environment.
+## 2026-11-06 — Final continuation validation and provider CSS cleanup
+
+- Removed the superseded duplicate provider-row CSS block. The direct identity/switch grid now has one authoritative responsive rule set; no source behavior or package dependencies changed.
+- Rechecked the latest timer and command-palette fixes in source: the toast timer ref is DOM-number typed, and command-palette RAF handles are effect refs with cleanup.
+- Revalidated all four hero token labels in Chromium using computed colors. Actual contrast measured 13.10:1–13.68:1 across WHO/ACT/SPIN/EVER, above the WCAG AA normal-text threshold.
+- Revalidated provider-name visibility, 44px switch height, row overflow and document overflow in Chromium at 320, 360, 375, 390, 620, 768, 1024 and 1440 px in dark and light themes.
+- Node release-contract audit remains 82/82; TypeScript/TSX syntax transpilation 94 files; all JS/MJS syntax, 10 JSON files and 4 CSS files pass their available static parsers. A synthetic build-budget fixture passed recursive graph accounting.
+- **Not claimed:** native Bun lint/typecheck/tests/audit, actual Vite production bundle budget, and integrated Playwright/axe have not been run on this exact revision because Bun and workspace dependencies are not installed in the authoring container.
+
+# Changelog
+
+## 2026-11-06 — Native pipeline type fixes, provider-grid repair, and hero contrast
+
+### Fixed
+- Typed the AppShell toast timeout ref as a DOM `number`, matching `window.setTimeout` and `window.clearTimeout` even when Node timer declarations are present in the TypeScript project.
+- Replaced mutable local animation-frame IDs in `CommandPalette` with effect-owned `useRef<number | null>` handles. Cleanup cancels both the initial and retry frames without post-effect local reassignment, addressing the React Compiler `immutability` warning while preserving native-dialog focus retry.
+- Replaced the provider row's nested compact `ToggleSwitch` wrapper with a direct, labelled `role="switch"` button grid item. The old wrapper carried a 130px min-width and had multiple conflicting responsive overrides; the new four-track grid reserves a deterministic 72px switch column and a separate flexible provider-identity column.
+- Removed stale provider-row wrapper/min-width CSS and made provider name and connection text explicit visible grid content at phone, tablet, and desktop breakpoints.
+- Changed the four 7–8px labels in the animated home illustration to opaque white, semibold text on the dark token cards. This addresses the exact contrast pairs reported by axe rather than weakening the accessibility scan.
+- Added four release-contract checks and one Bun regression test for DOM timer typing, palette RAF cleanup, the direct provider switch/grid, and home token contrast.
+
+### Verification status
+- The latest user-provided run before this patch passed the 78 release contracts, both TypeScript projects, all 188 unit/release tests, and the dependency audit (no moderate-or-higher vulnerabilities). It still had one frontend Oxlint immutability warning and two Playwright failures: no visible provider identities at tested phone/tablet widths and four low-contrast hero-token labels. The earlier TypeScript log also reported the AppShell DOM timer mismatch.
+- The current source has been patched for all four findings. `node scripts/check-release-contracts.mjs` passes 82/82. Chromium 144 checked provider-row visibility, row/document overflow, 44px switch targets, and visible accessible names at 320, 360, 390, 620, 768, 1024, and 1440 CSS px. Global TypeScript transpile syntax pass: 94 TS/TSX files, zero syntax diagnostics; tinycss2: 4 CSS files, zero errors; Node syntax checks: all repository JS/MJS files passed; JSON: 10 files, zero errors; relative source imports: 203 resolved, zero missing.
+- White token labels against the four previous axe-reported backgrounds calculate to 13.10:1–13.68:1, exceeding WCAG 2.2 AA's 4.5:1 normal-text threshold. The targeted fixture does not substitute for the integrated axe scan.
+- This environment does not include Bun 1.4.4 or installed workspace dependencies, so native Oxlint, TypeScript 7 semantic typecheck, Bun tests, security audit, Vite build/budgets, and integrated Playwright/axe have not yet been rerun on this patch.
+
+## 2026-11-06 — Startup bundle, responsive overflow, and E2E remediation
+
+### Fixed
+- Contained decorative artwork inside each game card with `overflow:hidden`. The 150px radial halo extended beyond a 320px card and caused the observed 328px document width; this is fixed at the component boundary rather than hidden only by root-level overflow clipping.
+- Made provider identity rows explicitly visible and non-collapsing in the first grid row; added browser assertions for provider-name visibility as well as row overflow.
+- Reworked the global `Ctrl/Cmd + K` shortcut to use a document-capture listener, `KeyboardEvent.code`, IME/repeat handling, and an editable-control guard. The command palette uses the small dependency-free CoreIcon registry so opening it does not pull the full feature icon module.
+- Kept game-card accessible names native to their visible contents so category, title, tagline, player metric, and action text are all included in the programmatic name. The card artwork and SVGs remain decorative.
+- Replaced the eager application entry path with asynchronous imports for the storage bootstrap, app types, and AppShell. A compact accessible loading surface is shown while the IndexedDB-first bootstrap and application shell resolve; startup errors now show a reload action instead of leaving a blank page.
+- Added a small inline-SVG CoreIcon registry for home/shell/command palette. Feature screens retain the full icon registry behind lazy screen boundaries.
+- Bumped the service-worker cache namespace to v6 so existing installs fetch the refreshed `index.html` and pre-cache the newly separated application-shell chunk graph.
+- Added an emitted chunk-dependency manifest and recursive gzip accounting for all static JS imports in the deferred `AppShell` graph (120 KiB) and all dynamic startup roots (160 KiB); existing 150 KiB entry JS, 20 KiB CSS, 170 KiB entry transfer, and per-game chunk limits remain unchanged.
+- Expanded browser regression checks to assert game-card decorative overflow containment and visible provider identities at supported widths. Added release-contract checks for dynamic startup imports and the deferred application-shell budget.
+
+### Verification
+- The latest user-provided Bun 1.4.4 run before these changes reported 188/188 unit and release-contract tests passing, frontend/backend typechecks passing, backend lint clean, no moderate-or-higher dependency vulnerabilities, and one frontend Oxlint `react(refs)` warning from the former dnd-kit provider row. Its production build failed the entry gzip budgets (289.87 KiB JS, 306.89 KiB JS+CSS); Playwright reported 9/13 passing and four failures: 320px overflow (328px document), hidden provider label, Ctrl+K command palette not opening, and four home-card accessible-name mismatches.
+- Current source replaces the dnd-kit provider row with native HTML drag/drop plus explicit keyboard move controls; `SortableProviderRow.tsx` contains no dnd-kit hook/ref access. The remaining lint warning is therefore removed in source, but native Oxlint has not been rerun on this revision.
+- `node scripts/check-release-contracts.mjs` passes all 78 source release contracts.
+- Global TypeScript 5.8 `transpileModule` syntax pass: 94 TS/TSX files, zero syntax diagnostics. This is a syntax check, not the project's TypeScript 7 semantic typecheck.
+- Chromium CSS fixture checks at 320, 360, 390, 620, 768, 1024, and 1440 CSS px: document scroll width equals viewport width at every width; provider identity text computes visible; each game card clips decorative overflow.
+- The updated Vite production build, actual gzip budget, native Bun lint/typecheck/unit/security pipeline, and integrated Playwright/axe suite have not been rerun in this environment. The emitted recursive AppShell/startup dependency-graph budgets must pass in the user's Bun 1.4.4 environment before release sign-off.
+
+## 2026-11-06 — Latest test-contract and React Compiler cleanup
+
+### Fixed
+- Added explicit light-theme mode-card surfaces, hover treatment, and selected-state styling. The prior token-based theme remained usable, but did not satisfy the explicit surface contract and lacked a dedicated selected/hover override.
+- Changed the History navigation glyph from the archive icon to the registered `history` SVG icon, aligning the visible navigation control with its meaning and the shared-icon regression contract.
+- Corrected the browser E2E release-contract assertion to look for `document.documentElement.scrollWidth`. The browser test already used this correct document-element metric; the old contract incorrectly searched for the nonexistent `document.scrollWidth` expression.
+- Removed the ref-sensitive `CSS.Transform.toString(sortable.transform)` call from the sortable provider row. The same dnd-kit translation/scaling is now serialized directly to a CSS `translate3d`/`scaleX`/`scaleY` string; DndContext active-ID drag feedback and pointer/keyboard sorting remain intact.
+- Extended the Node release-contract audit to 62 checks and the Bun regression contract to protect the explicit light-mode states, History icon, document overflow metric, and helper-free sortable transform rendering.
+
+### Verification
+- Latest user-provided Bun 1.4.4 log: repository policy passed; release contracts passed 58 checks; frontend/backend typechecks passed; backend lint was clean; frontend lint had two duplicate React Compiler `refs` warnings; 184 of 187 unit/contract tests passed. The three failing tests were the light-mode selector, History icon name, and stale browser overflow source assertion. The pipeline stopped before dependency audit and production build.
+- After these source fixes, `node scripts/check-release-contracts.mjs` passes all 62 checks.
+- Chromium 144 evaluated the full design-system stylesheet at 390×844: light-mode mode-card text/background/border and selected-state colours computed successfully; document scroll width equalled viewport width; CSS `color-mix()` was supported; no page errors occurred.
+- Source-level TS/TSX syntax, full Node/Bun tests, Oxlint warning-free output, TypeScript 7 semantic checks, security audit, production bundle budget, and Playwright E2E still require the exact Bun 1.4.4 workspace install. Bun and project `node_modules` are absent here; no full-pipeline pass is claimed.
+
+## 2026-11-06 — Frontend typecheck and React Compiler warning fixes
+
+### Fixed
+- Omitted the Motion `exit` prop entirely when reduced motion is selected instead of passing an explicit `undefined`, satisfying `exactOptionalPropertyTypes` while preserving the no-exit-animation behavior.
+- Normalized an optional player-wheel selection ID to `null` before passing it to the shared wheel component, matching the component's exact optional prop contract.
+- Adapted the gateway health request to TanStack Query's query-function context and forwarded its `AbortSignal` to `getAiBackendStatus`, correcting the query function signature and restoring typed response data.
+- Replaced the render-time `useSortable().isDragging` read with `useDndContext().active?.id === provider`. This removes the React Compiler refs warning while preserving the existing drag-state affordance through the DndContext active ID and its accent border/elevation feedback; pointer/keyboard drag sensors, transforms, listeners and sorting remain intact.
+
+### Verification
+- Applied directly against the user's supplied `bun run check` output. The reported 3 frontend TypeScript errors are addressed at their source; the React Compiler ref warning is also removed.
+- Added four Node release-contract checks and a Bun regression test covering all three reported TS fixes and the sortable-row React Compiler warning. The Node release-contract audit checks 58 source/config contracts; the sortable-row assertion also protects visible drag feedback. The exact native Bun pipeline must be rerun to confirm semantic typechecking, tests, dependency audit and production build. Bun and installed workspace dependencies are not present in this authoring runtime, so no successful native run is claimed.
+
+## 2026-11-06 — Shared roulette, gameplay response, and visual cleanup
+
+### Fixed
+- Replaced the separate player/challenge wheel renderers with the shared `SpinWheel` presentation component. `PlayerWheel` and `TruthDareWheel` now only adapt their segment data and labels; selection and persistence remain in domain/AppShell logic.
+- Expanded Truth or Dare from two sectors to eight equal sectors (four Truth and four Dare), with alternating outcomes, distinct green/orange sector shades, radial text placement, larger labels, crisp sector dividers, and a shared centre hub/pointer.
+- Updated roulette geometry and domain tests to cover all sectors on two-, four-, and eight-segment wheels. Added Playwright coverage for the eight-sector challenge wheel, radial label spacing/size, centered custom-pack dialog, responsive provider rows, GuessUp team separation, and immediate role reveal.
+- Removed the intentional 650 ms Imposter hold timer. A pointer or keyboard press now starts the card flip immediately; release, cancellation, focus loss, or hidden-tab state still conceals the role. Shortened the flip transition to 260 ms.
+- Fixed the GuessUp team roster line markup and layout so team labels and player lists remain visually distinct and wrap cleanly.
+- Tightened setup instructions, mode descriptions, and the pack summary to remove redundant copy and reduce visual density. Corrected the custom-pack helper so Imposter-specific hint instructions only appear for Imposter packs. Reconciled persistence documentation with the implementation: localStorage also stores compact non-secret AI provider ordering/enabled preferences; keys and player/game data remain excluded.
+- Constrained provider rows, status messages and generation form fields to their settings grid track; settings cards stack at tablet widths to avoid clipped controls. Dialogs use viewport-bounded sizing, internal scrolling, and an explicit closed-state display rule. Removed redundant setup/choice eyebrow text and retired unused wheel CSS.
+
+### Verification
+- Added source-level domain and Playwright regression coverage. Native Bun lint/typecheck/unit/E2E/build checks have not been run in this authoring environment because Bun and workspace dependencies are not installed.
+- Manual browser/device review of wheel readability, dialog placement, settings overflow, touch/keyboard reveal, and both themes remains required.
+
+## 2026-11-06 — Production CSS transfer budget optimization
+
+### Fixed
+- Removed the unused `tw-animate-css` stylesheet import. No application source uses its `animate-*`, enter/exit, or accordion animation utility classes; gameplay motion remains in scoped CSS and feature-specific animation code.
+- Removed the unused Geist variable-font CSS import from the initial stylesheet. The current UI source does not reference Geist by name; its display/body font declarations already fall back to sans-serif stacks.
+- Changed the shadcn/Tailwind `font-sans` token to a system UI stack, preserving the no-third-party-font-request policy while removing the Geist WOFF2 subset downloads from the initial route. The font packages remain installed for explicit, future feature use but are not loaded globally.
+- Kept the 20 KiB initial CSS gzip budget unchanged; optimized the shipped stylesheet rather than relaxing the release gate.
+
+### Verification
+- The supplied Bun 1.4.4 run reports 0 frontend/backend lint warnings or errors, both workspace typechecks pass, 177 tests pass, and `bun audit --audit-level=moderate` reports no vulnerabilities. The only reported failure is initial CSS gzip at 20.36 KiB against the 20 KiB limit.
+- Added a release-contract check and Bun regression test to prevent unused animation utility and Geist font CSS imports from returning to the initial stylesheet.
+- This authoring environment does not include Bun or installed workspace dependencies, so the optimized production CSS size and final `bun run check` still require confirmation on the user's Bun 1.4.4 environment.
+
+## 2026-11-06 — TypeScript 7 configuration and Fast Refresh lint repair
+
+### Fixed
+- Removed the unsupported `baseUrl` compiler option from both frontend TypeScript configs. The existing `@/*` mapping remains explicitly relative to the frontend project root (`./src/*`), compatible with TypeScript 7's path resolution.
+- Split the shadcn button's CVA definitions into `src/components/ui/button-variants.ts`. `button.tsx` now exports only the React `Button` component, eliminating the `react(only-export-components)` Fast Refresh warning while retaining reusable `buttonVariants` from its dedicated module.
+- Added release-contract and Bun regression tests for the TypeScript 7 config and component-only export boundary.
+
+### Verification
+- User-provided Bun 1.4.4 output for this archive: initial install and frozen install passed; the user explicitly trusted the two reported lifecycle scripts (`@tsparticles/engine` and `protobufjs`) with `bun pm trust --all`; all 41 release-contract checks passed; frontend Oxlint reported one Fast Refresh warning and no errors; TypeScript then stopped at TS5102 because `baseUrl` is removed in TypeScript 7.0.2. The test, audit, and build stages were not reached in that run.
+- The archive update addresses both reported frontend issues. Native Bun 1.4.4 lint/typecheck/test/audit/build must be rerun by the user because Bun is not installed in this authoring runtime.
+
+## 2026-11-06 — Dependency audit, shadcn setup, and environment template recovery
+
+### Fixed
+- Removed the accidental `cn` npm dependency. shadcn's generated button now imports the local `@/lib/utils` helper, which implements `cn()` using the existing `clsx` and `tailwind-merge` dependencies.
+- Added matching `@/*` path alias settings to the frontend `src/` TypeScript project and Vite resolver so shadcn-generated imports resolve at both typecheck and runtime.
+- Removed `@storybook/addon-interactions@8` from the Storybook 10 workspace. Storybook 9+ no longer requires that legacy addon package.
+- Removed unused/deprecated `prom-client` from the backend workspace; no source code currently imports it. This avoids adding a replacement metrics library before a metrics endpoint exists.
+- Added root Bun overrides for esbuild, glob, and minimatch and updated all corresponding vulnerable lockfile resolution edges to patched versions. The final exact `bun audit` result remains pending a native Bun 1.4.4 rerun.
+
+### Restored
+- Restored the root `.env.example` with the runtime, CORS, AI kill-switch, provider model, limiter, quota, and optional public API URL settings. All credentials are blank and `AI_ENABLED=false`; `.gitignore` already explicitly allows only `.env.example` among environment files.
+- Documented PowerShell and POSIX copy commands and clarified that provider/limiter secrets must never use `VITE_` variables.
+
+### Documentation
+- Reconciled UI architecture and Phase 6 docs with the installed Tailwind 4, shadcn/Base UI, Lucide, Radix, Motion/GSAP, and optional graphics/physics ecosystem. Documentation distinguishes installed packages from application-wide integration; heavy engines remain feature-scoped/lazy-loaded.
+- Added static release-contract checks and Bun tests for a present, secret-free `.env.example`, correct `.gitignore` exception, and the local shadcn class helper/`@/` alias wiring.
+
+### Verification
+- The supplied user log reports: root frozen install passed before this edit; 0 Oxlint warnings/errors across both workspaces; frontend and backend typechecks passed; 171 Bun tests passed; 36 release-contract checks passed. The log then failed only at `bun audit` due to old transitive versions of esbuild, glob, and minimatch.
+- In this authoring runtime, validated JSON syntax for workspace manifests and the lockfile, verified each lock workspace dependency snapshot matches its manifest, and checked the restored environment template against the environment keys read by the backend source. Bun is unavailable here, so `bun install --frozen-lockfile`, `bun audit`, and the complete `bun run check` have not been run against this edited archive.
+
+## 2026-11-05 — Phase 6 release hardening
+
+### Documentation and validation follow-up
+- Reconciled current-status sections in the checklist, root instructions, frontend README, provider-routing guide, tests, deployment runbook, and TODO to distinguish user-confirmed Phase 5 Bun results from new Phase 6 gates.
+- Fixed a quoting error in the new release-contract Bun test and confirmed TypeScript syntax transpilation is clean.
+- Verified the post-build budget gate against a disposable synthetic distribution fixture; this checks gate logic only, not the production build size.
+
+### Added
+- Added a Phase 6 release hardening runbook with the WCAG 2.2 AA manual matrix, device performance protocol, security/privacy operator review, and clean install/upgrade/rollback/offline/storage recovery rehearsal.
+- Added a release-contract script and Bun tests covering Vercel CSP/security/cache configuration, Elysia security floor, client BYOK/secret boundaries, accessible navigation/modal/reduced-motion source contracts, and service-worker API isolation.
+- Added a post-build release gate that measures gzip size of initial JS/CSS and each lazy game chunk, confirms all four game chunks are precached, rejects production source maps, and scans shipped assets for common provider/operator secret patterns.
+- Added `bun audit --audit-level=moderate` to the root quality pipeline; added `scripts/` to the root Bun test scope.
+- Added explicit `build.sourcemap: false` to Vite production configuration.
+
+### Hardened
+- Raised the declared Elysia dependency floor and lock workspace range to `^1.4.31`, above published Elysia 1.4.x patched floors; the full dependency graph remains subject to the native advisory gate.
+- Added Cross-Origin-Opener-Policy and Cross-Origin-Resource-Policy to backend JSON responses and assertions to API route tests.
+- Added focus scroll margin to help keep keyboard-focused controls clear of sticky navigation and extended the release contract to assert the 44px enhanced touch-target design token.
+
+### Verification
+- `node scripts/check-release-contracts.mjs` passed 33 source/configuration checks in the authoring environment.
+- The new archive still requires Bun 1.4.4 frozen install and the full `bun run check`, including the network advisory audit and actual build budgets. Manual WCAG, device profiling, license/deprecation review, Vercel Preview and release recovery exercises remain open. Phase 6 is not signed off.
+
+## 2026-11-05 — Backend provider fixture lint cleanup
+
+### Fixed
+- Removed 16 unnecessary escaped double quotes from JSON strings in `backend/tests/providers.test.ts`. The fixtures are enclosed in single-quoted TypeScript strings, so the escapes were redundant and triggered Oxlint `no-useless-escape` warnings.
+- Kept the fixture payloads byte-for-byte equivalent after JavaScript string evaluation; provider parsing assertions and runtime behavior are unchanged.
+
+### Verification
+- The user's Bun 1.4.4 run on the immediately preceding archive reported repository policy pass, frontend lint with 0 warnings/errors, both workspace typechecks pass, 161 tests pass, and the frontend production build pass.
+- That run reported 16 backend test-fixture lint warnings, all addressed by this change. The final Oxlint/full pipeline must be rerun on this archive to confirm zero warnings end-to-end.
+
+# Changelog
+
+## 2026-11-05 — Home light-theme contrast and AI provider response fix
+
+### Fixed
+- Fixed the home hero heading in light theme: the hero uses a fixed dark gradient, so its primary heading now uses a fixed high-contrast light foreground instead of inheriting the light theme's dark text token.
+- Fixed the saved-session resume banner's primary and secondary text colors so they remain readable on its fixed dark-green surface in both themes.
+- Replaced the Cloudflare Workers AI `ai/run/{model}` request with the documented OpenAI-compatible `/ai/v1/chat/completions` endpoint for the configured GPT-OSS model.
+- Added the exact output JSON Schema to the Cloudflare system message and retained application-side schema/content validation. The adapter no longer sends a JSON Schema response-format wrapper to GPT-OSS, which is not listed in Cloudflare's published JSON Mode support matrix.
+- Added support for direct and wrapped OpenAI-compatible `choices[].message.content` output, text-part arrays, GPT-OSS Responses-style `output_text` / `output[].content[].text` migration payloads, and legacy native REST envelopes where `result.response` is already a JSON object. All extracted formats still pass strict application validation.
+- Added low reasoning effort for GPT-OSS provider calls, task-specific default token budgets (6,000 for Imposter word/hint batches; 4,000 otherwise), and actionable safe errors for truncation, Gemini blocking, and empty provider output.
+- Added regression tests for Cloudflare chat-completions routing/request shape, direct and wrapped completion payloads, native structured-object envelopes, Responses-style output forms, and truncated GPT-OSS completions.
+- Updated provider-routing/deployment documentation and the AI test catalogue to describe the actual Cloudflare request/response contract.
+
+### Verification
+- Node 22 native TypeScript smoke tests passed for direct/wrapped Cloudflare Chat Completions, native structured-object extraction, GPT-OSS Responses-style text/output blocks, Groq truncation diagnostics, Gemini text extraction, and Gemini blocked-prompt diagnostics.
+- Full Bun/Oxlint/typecheck/build and live provider calls remain unverified in this authoring environment; the exact live Cloudflare account/model response must still be smoke-tested with the operator's credentials.
+
+## 2026-11-05 — TypeScript and lint failures from the first full Bun check
+
+### Fixed
+- Fixed `RequestInit.signal` compatibility under `exactOptionalPropertyTypes` by passing `null` when no `AbortSignal` is supplied in backend-status, provider-test, and content-generation requests.
+- Fixed the curated fallback item-kind lookup by snapshotting and narrowing `input.itemKind` before indexing the non-category mapping; the `category` kind continues to fail explicitly because it has no offline generation path.
+- Removed the GuessUp React Compiler immutability warning by deriving the synthesized music note index from a monotonic start time instead of mutating a local counter captured by the interval callback.
+- Replaced intentionally control-character-matching regular expressions in backend request/content validation with a shared `hasControlCharacters` helper, removing Oxlint `no-control-regex` warnings without weakening input validation.
+- Added unit coverage for C0/DEL detection and rejection of control characters in recent-item exclusions.
+- Added the root `dev:backend:hot` command (`bun --env-file=.env --hot backend/dev.ts`) alongside the existing process-watch command, and documented the distinction.
+
+### Verification status
+- User-provided Bun 1.4.4 output confirms `bun install --frozen-lockfile` and `check:policy` pass. The same full run showed lint warnings (no lint errors) and failed frontend typecheck with optional-signal and category-index errors.
+- This archive contains the source fixes for every warning/error shown in that run. Bun/Oxlint/dependency binaries are unavailable in the authoring environment, so the full native `bun run check` must be rerun by the user on this exact archive. Do not mark the full pipeline passed until that rerun is clean.
+
+## 2026-11-05 — Bun 1.4.4 root-workspace lock metadata correction
+
+- Investigated the user's Bun 1.4.4 logs: root `bun install` reported no changes, root `bun install --frozen-lockfile` succeeded, but `bun run check` failed because the repository policy expected `bun.lock.workspaces[""].name` to be `king-fun` while the lock retained `frontend`.
+- Identified the exact upstream issue: [oven-sh/bun #47656](https://github.com/oven-sh/bun/issues/47656), which reproduces this behavior on Bun 1.4.4 and documents that `bun install` can leave the renamed root label unchanged while frozen installation passes.
+- Verified the root, frontend, and backend lockfile dependency snapshots match their corresponding manifests, including the backend Elysia dependency.
+- Corrected only the root workspace name metadata in `bun.lock` from `frontend` to `king-fun`; did not change dependency versions, integrity hashes, or workspace dependency snapshots. Kept the repository policy check strict.
+- User must rerun `bun install --frozen-lockfile` and `bun run check` on this archive; the post-correction full Bun pipeline has not been independently executed here.
+
+
+## 2026-11-05 — Phase 5 category authoring and deployment hardening
+
+### Added / changed
+- Completed the Imposter AI category authoring path: generate validated category suggestions, require a usable name/description/emoji, derive collision-resistant stable slugs for non-Latin and long category labels, select/edit metadata, generate words, and save the metadata and word batch together as one local custom pack.
+- Made category metadata JSON Schema strict-mode compatible by requiring all declared category fields; non-category content now also enforces its schema-required hints array. Added regression coverage for missing/invalid emoji, stable non-Latin slugs, and the provider schema's required-field list.
+- Changed shared Redis readiness from a `PING` check to a non-mutating Lua `EVAL` capability probe so an operator token that can ping but cannot execute atomic limiter scripts is not reported ready; updated related verification and provider-routing documentation.
+- Fixed the repository policy script to parse Bun's trailing-comma text lockfile safely, so stale workspace snapshots are reported accurately rather than as a JSON parse failure.
+- Corrected Vercel's runtime config to the documented `bunVersion: "1.x"` value. Vercel manages the minor/patch runtime; the local and CI workspace remains pinned to Bun 1.4.4. The deployment runbook now requires a Preview compatibility check.
+- Revalidated the backend semantic TypeScript surface with the available global compiler and a temporary Elysia API declaration shim; reran the Node/TypeScript compatibility suite with **144 passing tests**. Syntax transpilation covered 79 TS/TSX files. The repository policy check was exercised against the current lockfile: it parsed Bun's trailing-comma format and reported the three expected stale root/frontend/backend workspace snapshot mismatches.
+
+### Remaining release gates
+- The root `bun.lock` still describes the former frontend-only workspace. Bun 1.4.4 and registry access were unavailable, so the lock has not been regenerated and `bun install --frozen-lockfile` / `bun run check` cannot be claimed.
+- Full frontend semantic typecheck, Oxlint, Bun's native test runner, Vite production build, Elysia route integration tests, Vercel Preview, Redis-backed distributed tests, live provider verification, billing controls, and browser/device acceptance remain open.
+- Bundled Imposter answer-specific 20-clue curation (36,000 human-reviewed clues) remains open; no generic clues were fabricated. Undefined Troll/elimination/faction-win/tie rules remain intentionally unspecified.
+
+## 2026-11-05 — Documentation reconciliation and conversation summary
+
+- Added `docs/project-chat-summary.md`, recording the major project decisions and user-requested deliveries across Phases 1–5, branding, Truth/Dare wheels, Mystery Who, persistence/PWA, quality gates, and deployment choices.
+- Reconciled README, requirements, instructions, backlog, checklist, provider-routing reference, and frontend README so Phase 5 is described as source-implemented but not deployment/CI verified.
+- Recorded the user's hosting choice as “recommend”; Vercel Bun Functions are the recommended initial target because Vercel documents Elysia + Bun deployment and can serve the Vite frontend and `/api` gateway from one project. Vercel Hobby is personal/non-commercial only; commercial use requires an appropriate paid plan or alternate host.
+- Recorded Cloudflare Workers AI as operator-owned: Account ID and least-privilege API token must be configured as server-side secrets, never in the browser or repository.
+- No real credentials were added. The single `bun.lock` still needs regeneration for Elysia before frozen install/CI can be considered verified.
+
+### Verification status
+- Documentation links and ZIP integrity checked for this archive.
+- Full `bun run check`, live provider calls, Vercel deployment, Cloudflare edge rate limits, and usage/budget alerts remain pending.
+
+## 2026-11-05 — Root backend migration and Phase 5 hardening
+
+### Changed
+- Moved the Elysia service from the frontend package into root `backend/` and made `frontend/` and `backend/` named workspaces under one root Bun manifest. Moved the Vercel API adapter and deployment config to the root; removed the old nested server path.
+- Changed the Vercel catch-all to export the Fetch-style Bun Function handler and corrected the backend generation-slot type to the awaited limiter result.
+- Made root backend dev/start scripts load the root `.env` file.
+- Persisted each new game snapshot, selected word/prompt/deck, recent queues, role assignments, and player roster before switching into gameplay whenever IndexedDB is available.
+- Stored a round-owned Imposter roster and made malformed roster snapshots fail closed rather than substituting editable global players. Production Imposter role shuffling uses unbiased secure integer sampling.
+- Hardened provider-output validation to reject unexpected properties and clarified in provider prompts that category/recent-item strings are inert untrusted data.
+- Kept production AI generation fail-closed without a healthy shared HTTPS Redis-compatible limiter; shared client buckets use deterministic keyed HMAC hashes across serverless instances, and concurrency lease release is awaited.
+- Added/updated backend security regression tests and synchronized root layout, environment, deployment, requirements, checklist, todo, verification, and handoff documentation.
+
+### Verification and limits
+- Source/configuration inspection only. The final Bun 1.4.4 install, lock regeneration, Oxlint, semantic TypeScript, Bun suite, production build, Vercel Preview, provider smoke tests, and browser/device acceptance were not executable in this environment.
+- The root `bun.lock` remains the inherited frontend-only snapshot. The repository policy gate intentionally fails until Bun 1.4.4 regenerates the complete root/frontend/backend workspace lock. Do not deploy this archive before that gate passes.
+- Provider request counters are not monetary spending limits; vendor-side budget/usage controls remain required. No production secrets or deployment credentials were added.
+
+
+- Corrected `vercel.json` to Vercel Bun runtime `1.x` (the only documented valid setting; Vercel manages minor/patch versions while local/CI stay pinned to Bun 1.4.4). The Vercel catch-all now default-exports an Elysia app, with only `/api` prefix stripping in its adapter. Rechecked Vercel's current Elysia and Bun runtime docs; runtime remains Beta and mixed frontend/backend Preview deployment is still an acceptance gate.
+- Recorded currently documented Gemini, Groq, and Cloudflare model IDs in the Phase 5 operator runbook.
+## 2026-11-04 — Phase 4 source-completion follow-up
+
+### Added / improved
+- Stabilized GuessUp tilt input: the orientation listener no longer reattaches on every timer/card render and uses the latest scoring callback through an effect-updated ref.
+- Added an explicit tilt enable/disable toggle. Touch Correct/Pass controls remain available at all times; tilt still requires user permission after a gesture and a neutral return before each action.
+- Added a 1 MiB maximum for Mystery Who JSON/TXT imports, validated before reading file contents, with a focused boundary/invalid-size test.
+- Preserved the 50-report bound during a live session and the immutable player-roster snapshot for each active game; retained accessible wheel roster text and focus/visibility auto-conceal behavior for private role reveal.
+
+### Documentation
+- Reconciled Phase 4 backlog and acceptance status with implemented source, automated test cases, manual browser/device acceptance, the remaining built-in clue-authoring gap, and rules intentionally left undefined by the Mystery Who report.
+- Labeled the earlier Phase 4.0/4.1 checklist sections as historical snapshots so their old unchecked items cannot be mistaken for the current source status; clarified the Phase 2/3 source completion versus browser acceptance checkboxes.
+- Updated requirements, tests, verification, README files, checklist, and implementation backlog. Phase 5 AI work remains deferred.
+
+### Verification
+- The user supplied a complete passing `bun run check` log for the previous 102-test snapshot: Oxlint 0 warnings/0 errors, TypeScript pass, 102 tests pass, and Vite build pass.
+- After incremental Phase 4 changes, the current source suite ran through a Node 22 compatibility harness: 111 passed, 0 failed. All 60 TS/TSX files passed TypeScript transpile syntax checks; `public/sw.js` passed `node --check`.
+- The Node compatibility harness is not the Bun test runner. Re-run `bun run check` against this exact final archive. Real-browser/device verification (reload/resume, mobile/desktop layouts, keyboard/screen-reader, reduced motion, touch/blur privacy, wheel restoration, audio and sensor permissions) remains pending.
+- The bundled Mystery Who content remains four shared category-safe hints per answer rather than 20 distinct word-specific hints. This requires authoring/review; it is not padded with generic clues. Troll Mode and elimination/faction win/tie mechanics remain unimplemented because the source report does not specify them.
+
+
+All notable project changes will be documented here. This file follows the structure of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses [Semantic Versioning](https://semver.org/).
+
+No historical releases are inferred. Phase 0–1 foundation work and the Mystery Who parity specification are recorded under **Unreleased**. The user confirmed all Phase 0–1 checks passed; this is noted as user-reported verification, not an independently attached CI artifact.
+
+## [Unreleased]
+
+### Documentation — 2026-11-04: Mystery Who report archive and local-rule specification
+
+- Archived the complete user-supplied Mystery Who report verbatim at `docs/references/mystery-who-full-report.md`.
+- Expanded `docs/mystery-who-local-reference.md` into the canonical local-only rule extraction, including all 30 category names, roles/modes, count bands, timer, reveal, voting, Mr. White threshold, results/privacy, custom content, AI-category intent, and repeat protection.
+- Updated README, contributor instructions, requirements, backlog, acceptance checklist, test catalogue, verification register, gameplay reference, AI routing notes, and frontend README to reference the source and reflect the same local-only scope.
+- Explicitly excluded the supplied report's online mode. Documented the user-approved allowance for Bun-managed UI/component, accessibility, motion, and icon libraries with maintenance/license/compatibility/accessibility checks.
+- Restored `tests.md` from the clean repository copy after detecting accidental repeated status text had expanded it to 34 MB; added report-derived acceptance cases and removed obsolete “original reference unavailable” blockers.
+- Retained the documented content gap (four shared hints per bundled answer versus the report's 20 hints per entry) and report-undefined Troll/elimination/win/tie mechanics as open items.
+
+### Verification
+
+- Documentation links and current status text were reconciled by source inspection.
+- The archived report was copied verbatim from the user attachment.
+- No source code changed; no Bun lint/typecheck/test/build was run in this documentation-only update.
+
+
+### Added — 2026-11-04: Mystery Who local gameplay implementation (initial content snapshot; later expanded)
+
+- Read the complete user-supplied Mystery Who report and used it as the local gameplay reference; intentionally excluded online multiplayer.
+- Implemented Classic, Mystics, and Chaos role allocation with Civilian, Mystic, and Mr. White information boundaries. Role assignment and Chaos selection use the Web Crypto-backed random adapter.
+- Added approximately 650 ms press-and-hold reveal, conceal-on-release, gated pass-phone handoff, Mystic hint on/off and same/different hint allocation.
+- Added discussion-only timer configuration (off by default, 15–600 seconds in 15-second steps, 180-second default), voting toggle, hidden-voter results, sequential ballots selecting the ordinary Mystic count, self-vote and skip support, and invalid/duplicate-target protection.
+- Added Mr. White final-guess threshold evaluation after all ballots and normalized exact-word comparison.
+- Initial implementation added 30 built-in category packs with uniform category-first selection, 600 curated words, local hints, and optional emoji on custom packs. The catalogue was subsequently expanded to 1,800 answers in the later Mystery Who continuation entry.
+- Added custom word/hint lines (`Secret Word | Hint 1 | ...`), JSON/TXT import/export, and persisted Imposter preferences.
+- Extended last-10 protection to compare normalized secret-word text as well as stable IDs across categories.
+- Updated requirements, gameplay reference, checklist, TODO, tests, and verification notes to use the supplied report as the local rules source. Removed the stale duplicate `src-extract/` mirror so `frontend/` remains the single maintained implementation tree.
+
+### Fixed
+- Mr. White threshold is evaluated only after all ballots are submitted; it counts received selections against the total submitted selections, rather than incorrectly activating during an early ballot.
+- Category selection is uniform across eligible selected categories before drawing a word, instead of weighting categories by their number of entries.
+- Removed canonical duplicate entries across the new built-in category packs.
+
+### Verification
+- Strict standalone TypeScript typecheck passed for the framework-independent Imposter domain, content seed, shared contracts, IDs, and validation modules.
+- A temporary React declaration shim allowed a structural typecheck of the complete frontend source; this is not a substitute for the official project typecheck.
+- All 51 frontend TypeScript/TSX files passed syntax transpilation. A Node 22 compatibility harness executed 20 Imposter domain tests, 3 seed-content tests, and 3 canonicalization tests (26 passed).
+- `node --check` passed for the service worker; PostCSS parsed all 3 CSS files. Canonical duplicate scan reports 0 duplicates.
+- Full Bun/Oxlint/project typecheck/production build and browser/device acceptance were not run because Bun and project dependencies are unavailable in this environment. No full CI pass is claimed.
+- The report specifies 60 words/category (1,800 total); current seed is 600 curated words across 30 categories, with four category-level hints per word. Content expansion remains open. Troll Mode effects and civilian/mystic elimination/win rules are not defined in the report and remain unimplemented pending further source evidence.
+
+
+### Added — 2026-11-04: video-led gameplay and AI-provider specification refresh (documentation only)
+
+- Reviewed all four user-supplied recordings: Imposter (90.7 s), Truth or Dare (78.5 s), GuessUp (91.9 s), and I Have Never (71.6 s). Expanded the gameplay reference with per-game setup/play loops, animation choreography, mode selection, deck/pack selection, reactions, reporting, handoff, and accessibility/reduced-motion requirements.
+- Clarified that the videos are interaction references only: do not copy reference assets, branding, exact layouts, content, paid features, ads, or online Imposter.
+- Specified the reorderable Gemini/Groq provider rows (off by default, greyed-out switch until a key is entered, settings-icon key modal), pinned/always-active Cloudflare Workers AI row (no toggle or settings icon), per-round provider-order snapshot, sequential fallback and safe snackbar reason.
+- Specified the public Elysia + Bun API gateway under `backend/`, its Cloudflare Workers AI REST adapter, server-only Cloudflare credentials, request-scoped BYOK forwarding, rate/budget/abuse controls, and the distinction between the Elysia host and Cloudflare Workers AI as an upstream provider. Backend and provider UI remain unimplemented.
+- Clarified adaptive player/category anti-repeat windows and isolated content queues per game/category/item kind/locale; added explicit migration tracking because the current source still defaults the player exclusion window to three.
+- Updated README, frontend README, requirements, instructions, gameplay/provider design docs, backlog, checklist, tests, and verification notes to the same target/status.
+
+### Verification
+- Documentation-only changes; no application source, provider UI, or Elysia backend was implemented in this update.
+- Internal link/status consistency and test-ID definition checks are performed for this archive. The Bun application pipeline and browser tests are not run by a documentation-only update.
+
+
+### Added
+- Mandatory 1:1 gameplay/feature parity contract for the Imposter game against Mystery Who classic/offline mode, excluding UI/UX and online mode.
+- Confirmed classic rules: 3–20 players; Mystic-count bands; per-player Skip Vote; self-voting; hints, timer, discussion, Troll Mode, category selection/custom categories, persistent dark mode, last-10-word exclusion, local/offline play, and Gemini generation with local fallback.
+- Parity audit, source-vs-portal verification matrix, acceptance checklist, and dedicated test cases; unresolved original-game behavior is explicitly blocked rather than guessed.
+- Project requirements, architecture guidance, implementation backlog, test plan, and verification plan.
+- Bun 1.4.4-pinned CI workflow, strict TypeScript configuration, Bun-only project scripts, and repository policy check.
+- Shared versioned domain contracts, branded IDs, runtime validators, and typed action/session/content/pack schemas.
+- Web Crypto-backed 53-bit rejection-sampled integer selection, Fisher–Yates shuffle, player anti-repeat selection, and stable-ID content deck cycles.
+- Original general-audience seed content and four packs, with source/license provenance, plus Unicode-aware duplicate detection.
+- Bun-native unit/property-style tests for the shared contracts, RNG, selection, content cycles, and seed catalogue.
+
+### Changed
+- Replaced the empty Vite app metadata and README with the project identity, current foundation scope, and Bun workflow.
+- Tightened TypeScript compiler options and documented the current architecture decisions.
+
+### Deprecated
+- —
+
+### Removed
+- —
+
+### Fixed
+- Removed the unused `roundClock` React state that failed strict `noUnusedLocals` typechecking.
+- Copied the readonly `recentPlayerIds` tuple/array into a mutable array before storing it in `Save.recent`.
+- Removed the unused player-list map index parameter that failed strict `noUnusedParameters` typechecking.
+
+### Security
+- No online gameplay, network-synchronized state, lobby, host, chat, or voice features are included in the classic parity scope.
+- Production selection paths use Web Crypto; deterministic RNG injection is confined to internal test seams. No provider secrets or persistence code were added.
+
+<!--
+Release process:
+1. Add only changes that are merged and present in the release candidate.
+2. Reference requirement/task IDs where useful.
+3. Record migrations, compatibility changes, and security fixes explicitly.
+4. Move the Unreleased entries into a dated/versioned heading during release.
+5. Never claim a test passed unless the corresponding CI/manual evidence exists.
+-->
+
+
+### Added — Phase 2 implementation (verification pending)
+- IndexedDB v2 repository with dedicated app-state, active-session, active-round, history, and custom-pack object stores.
+- Atomic snapshot/session/round/history commits with monotonic revision compare-and-swap.
+- Legacy localStorage snapshot bootstrap and v1→v2 schema migration; legacy source is removed only after successful persistence.
+- BroadcastChannel revision notices, stale-write conflict status, and explicit reload-latest action.
+- Local backup export plus history/custom-pack deletion controls.
+- Versioned service-worker shell cache, navigation fallback, same-origin hashed-asset caching, old-cache cleanup, and API/non-GET cache exclusions.
+- PWA web manifest and storage/migration contract tests.
+- Removed the three reported Oxlint warnings by using external-store status notifications, immutable spin snapshots, and a boolean-derived GuessUp timer effect.
+
+### Verification
+- The user previously confirmed the Phase 1 aggregate check passed on Bun 1.4.2: repository policy, lint (then 3 warnings), TypeScript, 23 tests, and Vite production build.
+- Phase 2 changes have not yet been run through the user's Bun toolchain or a browser. Do not treat Phase 2 as verified until the updated `bun run check` and browser persistence/offline checks pass.
+
+## Phase 2.1 — Visual redesign and tactile interactions
+
+- Reworked the visual system with a restrained typographic hierarchy, tighter spacing, quieter surfaces, refined game tiles, and responsive layouts.
+- Added a game-icon-origin color splash transition from the home lineup into game setup, including a short icon pop.
+- Replaced Imposter's always-visible secret panel with a physical-feeling 3D role card: blank reverse by default, hold to flip and reveal, release to conceal. Includes pointer, touch, and keyboard interaction.
+- Added reduced-motion handling for the new transitions.
+- Automated checks and browser/device verification are pending.
+
+
+## Phase 2.2 — Home vinyl player and component separation
+
+### Added
+- Replaced the hero's decorative sticker with a vinyl turntable integrated into the hero layout.
+- Added Free To Use public API track discovery and an explicit-playback player with premium-track filtering, previous/next controls, volume, progress, and attribution.
+- Extracted Imposter, GuessUp, Truth or Dare, and Never Have I Ever into independent game components.
+- Extracted setup, history, and settings screens into their own modules.
+
+### Changed
+- `App.tsx` now contains only the home-page component. `AppShell.tsx` owns app navigation, shared state, persistence, and orchestration.
+- Added a shared application type and game-definition module.
+
+### Licensing note
+- Free To Use's API article and formal Free To Use License differ in how non-commercial app usage is described. Written permission/clarification is required before public deployment; see README.
+
+### Verification
+- Full Bun lint/typecheck/test/build and browser playback checks are pending because the Bun toolchain/dependencies were unavailable in this environment.
+
+## Phase 2.2.1 — Typecheck cleanup
+
+- Removed the unused `onStartSetup` home-page prop from the component contract and destructuring.
+- Added the MP3 source to the vinyl track-loading effect dependencies so source changes are handled correctly and React hook lint passes.
+- Re-ran no project toolchain here; run `bun run check` after installing dependencies to verify lint, typecheck, tests, and build.
+
+
+## Phase 2.2.2 — App-shell lint/typecheck cleanup
+
+### Fixed
+- Removed the unused `startSetup` callback from `AppShell.tsx`; game setup is entered through the existing animated `launchGame` flow. This resolves the reported Oxlint `no-unused-vars` warning and TypeScript `TS6133` error.
+
+### Verification
+- Source-level check confirms the unused declaration is absent and the `launchGame` setup transition remains intact. Full `bun run check` must be rerun locally; Bun is not available in this environment.
+
+
+## Phase 2.3 — Replace vinyl player with CSS game-night animation
+
+### Removed
+- Removed the Free To Use API integration, audio playback controls, vinyl turntable, and their styles.
+- Removed obsolete Free To Use licensing and playback test notes from project documentation.
+
+### Added
+- Added `src/HeroMotion.tsx` and `src/hero-motion.css`: a CSS-only animated hero illustration featuring four colour-coded game tokens orbiting a glowing party die.
+- Added floating token motion, rotating orbital rings, pulsing glow, accent sparks, and a concise visual caption.
+- Added `prefers-reduced-motion` support; no external assets, audio, API calls, or credentials are required.
+
+### Changed
+- Replaced the vinyl component in `App.tsx` with `HeroMotion`.
+- Reworked hero layout to use a stable two-column desktop grid and a vertically stacked mobile layout, with viewport-specific typography and spacing.
+- Updated README, checklist, tests, todo, and verification documentation to reflect the new implementation.
+
+### Verification
+- Source inspection confirms there are no remaining Free To Use or vinyl imports in the frontend source.
+- Full `bun run check` and real browser/device testing have not been run in this environment.
+
+### Changed — Phase 2.3.1: responsive navigation and theme control
+- Replaced the text labels for History and Settings in the top navigation with compact inline SVG icon buttons; History retains its entry count as a small accessible badge.
+- Rebuilt the light/dark mode control as a fixed-size circular button with centered SVG sun/moon icons, a short icon transition, and explicit accessible labels.
+- Reworked top-bar flex sizing, spacing, and horizontal padding so the brand and action controls fit without clipping across mobile widths, including very narrow screens.
+- Added hover/press feedback while preserving keyboard focus visibility and reduced-motion support.
+
+### Fixed — Phase 2.3.1
+- Prevented the theme switcher from shrinking or being pushed outside the viewport by assigning a non-shrinking circular footprint and allowing visible overflow around the top bar.
+- Prevented mobile navigation controls from colliding with the brand by tightening responsive gaps and scaling controls at narrow breakpoints.
+
+
+## Phase 3.0 — Shared UI foundation and PWA metadata
+
+### Fixed
+- Added `mobile-web-app-capable=yes` alongside the Apple-specific standalone metadata to address Chromium's deprecated-meta warning while retaining iOS home-screen compatibility.
+
+### Added
+- Centralized shared typography, spacing, radius, motion, easing, and focus tokens in the global stylesheet.
+- Added a keyboard-accessible skip-to-content link and a focusable main-content target.
+- Promoted home game tiles from custom `article[role=button]` elements to native buttons, removing custom keyboard emulation and improving assistive-technology semantics.
+- Added polite, atomic live-region semantics to transient toast announcements.
+- Standardized visible focus treatment, disabled-control affordances, touch manipulation, and minimum input target height.
+- Added a higher-contrast preference enhancement and consolidated reduced-motion behavior into the global baseline.
+
+### Verification
+- Source-level assertions cover both PWA metadata tags, native game buttons, skip navigation, live-region announcements, design tokens, and reduced-motion handling.
+- Full Bun lint/typecheck/test/build and browser/screen-reader checks have not been executed in this environment.
+
+
+## Phase 3.1 — Shared component system and accessible confirmations
+
+### Added
+- Added reusable `ConfirmDialog` using the native HTML dialog modal API. It provides a labelled title/description, Escape and backdrop cancellation, browser-managed focus containment, and focus restoration.
+- Replaced native `window.confirm` prompts for leaving a game, clearing history, deleting custom packs, and erasing local data with consistent in-app confirmation dialogs. Destructive actions now require explicit confirmation.
+- Added shared `ProgressBar`, `CountdownDisplay`, `ChoiceButton`, `PromptCard`, `EmptyState`, and `StatusPanel` components.
+- Integrated the progress bar and accessible countdown into GuessUp; shared choice and prompt components into Truth or Dare; shared prompt presentation into Never Have I Ever; empty state into History; and status panel into storage warning/conflict UI.
+- Added unit tests for progress clamping and duration formatting.
+- Added shared component styles with responsive sizing, visible interaction feedback, semantic labels, and reduced-motion behavior.
+
+### Fixed
+- Standardized destructive confirmation copy and prevented accidental one-click data deletion.
+- Ensured the GuessUp timer is exposed as a non-interruptive timer output rather than announcing every second to screen readers.
+
+### Verification
+- Source review and archive integrity checks are performed for this delivery. Bun lint/typecheck/test/build could not be run because Bun and the project's installed dependencies are unavailable in the authoring environment. Global `tsc` was attempted but cannot resolve the project's `vite/client` and `node` type packages without the frozen install.
+- Browser focus restoration, screen-reader behavior, zoom/reflow, device orientation, and reduced-motion checks remain required before release sign-off.
+
+
+## Phase 3.0.1 — GuessUp duration formatter import fix
+
+### Fixed
+- Imported `formatDuration` from the shared UI utility module in `GuessUpGame.tsx`, resolving the reported TypeScript `TS2304` error in the progress bar's accessible value text.
+
+### Verification
+- Source-level import/export consistency checked against `components/ui/ui-utils.ts`.
+- Full `bun run check` must be rerun in the project environment; no passing result is claimed here.
+
+## Phase 4.0 — Imposter vertical slice: role allocation and private voting
+
+### Added
+- Added a pure Imposter domain module with validated 3–20 player round creation, the specified Mystic-count formula, shuffled one-to-one reveal order validation, and explicit vote-state transitions.
+- Added per-player sequential vote handoff. Each player can cast one final vote or skip; self-voting is supported; out-of-turn, duplicate, and invalid-target votes are rejected.
+- Added deterministic vote tally outcomes for a unique leader, a tie, and an all-skip/no-vote round. The UI reports the outcome without inventing elimination or win rules that have not been confirmed against the original game.
+- Reworked the voting screen to pass the phone privately, select one target, explicitly lock the vote, and show committed results.
+- Improved the private reveal card's native button semantics and focus treatment while retaining press-and-hold concealment.
+- Enforced a rolling last-10 selected-word exclusion for the Imposter seed pool. If every available word is excluded, the game reports exhaustion instead of silently repeating.
+- Added domain tests for player-count boundaries, role allocation, reveal-order validation, vote order, duplicate-vote rejection, self-voting, skips, ties, and no-vote results.
+
+### Changed
+- Imposter round creation now uses the domain factory and commits the selected word to the recent-word history.
+- Added responsive vote-selection and result-list styling with keyboard focus and reduced-motion support.
+
+### Audit limitation
+- The original Mystery Who source/build was not included in the supplied project archive or conversation attachments. Exact parity for special roles/Mr. White, Troll Mode, hints, timer behavior, elimination/win rules, category selection, and tie/no-vote behavior therefore remains BLOCKED pending a reference build/source or documented gameplay recording. The current result behavior is explicitly provisional and does not claim 1:1 parity.
+
+### Verification
+- Source-level review completed; the new domain test suite is added but has not been executed because Bun is unavailable in this environment. Full lint/typecheck/test/build and browser testing remain pending.
+
+
+## Phase 4.0.1 — Imposter reveal index type and safety fix
+
+### Fixed
+- Guarded the current reveal-player lookup before indexing the role map, resolving TypeScript `TS2538` when `noUncheckedIndexedAccess` allows the reveal-order lookup to be `undefined`.
+- Made role reveal fail closed for invalid or incomplete saved round state: an unavailable role cannot fall through to the civilian secret word, and the reveal control is disabled until a valid role is present.
+
+### Verification
+- Source assertions confirm the undefined guard, guarded role lookup, disabled invalid-role reveal control, and non-disclosure fallback.
+- Full `bun run check` was not available in this environment and must be rerun after installing dependencies.
+
+
+## Phase 4.1 — Imposter reveal repair and gameplay hardening (2026-11-03)
+
+### Fixed
+- Fixed the collapsed private role card shown in the supplied screenshot. The inner card wrapper is block-level with explicit 100% width/height, so the 3D back/front faces now fill the full card instead of collapsing to the text run's intrinsic inline width.
+- Reworked card sizing and face layout for consistent 380px desktop cards and responsive mobile sizing.
+- The role card remains concealed by default and flips only while the player is pressing/holding; pointer release/cancel/lost capture, keyboard release, and blur conceal it again.
+- Prevented passing the phone until the current player has viewed their role once. Every new player's handoff begins with the card concealed.
+- Added live accessible reveal status and hides the inactive face from the accessibility tree.
+
+### Improved
+- Added explicit category labels derived from the selected word's category ID.
+- Added private-vote progress, clearer selected-target confirmation, and explicit remaining-vote counts.
+- Hardened voting domain validation against corrupted snapshots, duplicate/unknown voters, overlapping skips/votes, invalid targets, invalid voter indexes, and incomplete vote resolution.
+- Added tests for vote progress and rejection of invalid/incomplete state.
+
+### Remaining Phase 4 blockers
+- Exact Mystery Who parity remains unverified because its original source/build or gameplay reference has not been supplied. Special roles, hint/timer rules, Troll Mode, elimination/win conditions, and exact category rules are intentionally not invented.
+- Remaining work is editable GuessUp team assignment/sensor shortcuts, Truth or Dare pack/suitability selection and wheel-resume QA, and I Have Never selectable/custom packs.
+
+### Verification
+- CSS parsed with PostCSS; all TS/TSX source files passed TypeScript transpile syntax checks; domain logic smoke checks and ZIP integrity were checked for this delivery.
+- Full Bun lint/typecheck/test/build and desktop/mobile browser testing were not run in this environment.
+
+
+### Phase 4.1 additions — GuessUp, Truth or Dare, and I Have Never
+
+- Added a GuessUp domain module with input validation, alternating Team A/Team B assignment, correct/pass scoring, 60-second team turns, explicit Team A handoff to Team B, and final round completion.
+- GuessUp now starts with a securely shuffled content deck, persists team rosters/scores/deck progress/timer, and provides a winner/tie summary. Manual Correct/Pass controls remain fully usable without motion sensors.
+- Added GuessUp unit tests for roster/deck validation, alternating team assignment, score accounting, handoff, completion, and timer tick/expiry transitions.
+- Added a penalty-free Truth or Dare opt-out action and fixed Next turn so it preserves the current turn and opt-out counters.
+- Added an explicit I Have Never statement skip action; skipped statements no longer increment the response count. The neutral no-penalty response convention is stated in the UI.
+- Updated the Phase 4 task board, checklist, tests, verification, and README to reflect implementation and remaining validation.
+
+
+## Phase 4.1.1 — reveal-card repair validation and game-loop polish (2026-11-03)
+
+- Repaired the supplied Imposter reveal-screen defect by making the card inner wrapper and both 3D faces block-level, explicitly full-size elements; added stable responsive dimensions so the card cannot shrink to the text's intrinsic width.
+- Added defensive rendering for incomplete Imposter snapshots: missing role, voter, word, votes, skips, or order values now produce safe unavailable/handoff states rather than exposing the secret or indexing missing data.
+- Hardened Imposter vote integrity so the saved voter cursor must equal committed votes plus skips. Corrupt vote progress is surfaced and voting is blocked rather than rendering an invalid handoff.
+- Hardened GuessUp against invalid/duplicate player IDs, invalid results, double-ending a team turn, and scoring after the shuffled deck is exhausted.
+- Removed GuessUp's modulo deck cycling. Cards are not repeated within a team's turn; when Team A's deck is exhausted, scoring controls disable and the team can finish its turn. Team B restarts the same shuffled sequence at card one for a fair comparison.
+- Added a visible GuessUp card counter and exhausted-deck message.
+- Fixed Imposter replay so the completed round is added to local history before a new round starts; selecting a new vote target also clears a previous validation message.
+- Clarified the I Have Never response action so players know that advancing the statement records a response.
+- Expanded original bundled seed content: 30 Imposter words, 48 GuessUp charades prompts, 12 Truth prompts, 12 Dare prompts, and 20 I Have Never statements. New content uses stable unique IDs and stays local/offline.
+- Added domain regression cases for voter-cursor inconsistency, GuessUp duplicate player IDs, deck exhaustion, and repeated team-round completion; added `content/seed.test.ts` for stable ID uniqueness, pack-reference integrity, and minimum pool sizes.
+- Updated `todo.md`, `checklist.md`, `tests.md`, `README.md`, and `verification.md` to reflect the expanded slice and outstanding source/browser verification.
+- Validation for this archive: TypeScript syntax pass for all 41 TS/TSX files; strict typecheck of Imposter/GuessUp domain modules and tests; CSS parse; 16 domain/content test cases through a Node compatibility harness; domain runtime smoke tests; seed-ID uniqueness/content-count checks; and ZIP integrity. Full Bun project check and browser/device testing were unavailable and are not claimed.
+
+
+## Phase 4.2 — gameplay completion pass (2026-11-04)
+
+### Added
+- Added shared strict content-selection helpers that canonicalize duplicate content, exclude recent and current-round IDs without silently relaxing the exclusion window, maintain bounded recent FIFO histories, and return explicit exhaustion.
+- Added a pure roulette-geometry function with regression coverage for all wheel segments and rotations from a non-zero prior angle.
+- Added a structured local-only prompt report dialog with unsafe/offensive, spelling/grammar, wrong-category, and not-a-prompt reasons plus an optional 240-character note; reporting leaves the current prompt and score unchanged.
+- Added local reaction controls for Truth or Dare and I Have Never.
+- Added I Have Never response validation: one response per known player per prompt, neutral Fingers/Points/Stories methods, and personal points only for affirmative responses in Points mode.
+- Tightened I Have Never response validation to reject snapshots without a valid player roster; added a regression assertion for the missing-roster case.
+- Added GuessUp custom team names, explicit player-to-team assignment, team balancing, configurable 30/45/60/90/120-second turns, 3–2–1 readiness, and deadline-based timer reconciliation.
+- Added optional original synthesized GuessUp background music (user-started), sound effects, vibration, and tilt input; all are off by default and touch controls remain fully usable. The music uses Web Audio-generated notes and adds no third-party media asset.
+- Added All together / Spin the wheel / One at a time modes for Truth or Dare and I Have Never, with mode-specific player selection/turn progression, persisted wheel result, prompt/statement flow, local response/reaction state, and explicit exhausted states.
+- Added editable player roster controls and custom local content-pack create/edit/delete, suitability filters, selected-pack tray, GuessUp deck filters, and a confirmation-gated per-game recent-content-history reset.
+- Added responsive game-stage and setup styles, sticky safe-area-aware actions, prompt/role-card transitions, wheel presentation, reduced-motion overrides, and accessible state labels.
+
+### Changed
+- Reworked GuessUp team and timer domain logic to validate explicit assignments and use a wall-clock deadline, so background-tab timer throttling cannot grant extra time. Team B receives the same shuffled deck order for a fair comparison.
+- Committed roulette player selection to the local snapshot before starting the wheel animation; when durable commit is unavailable, the UI resolves immediately rather than implying an unsaved result.
+- Removed silent content-repeat fallback. Empty eligible pools now display an explicit exhausted state; a separately confirmed setup action resets only that game's recent content history.
+- Updated custom pack item IDs by version so edited content is not blocked by history associated with the previous pack revision.
+- Strengthened Imposter private role concealment and prevented phone handoff while the current player's role card is still revealed.
+- Updated `README.md`, `todo.md`, `checklist.md`, `tests.md`, and `verification.md` to describe implemented Phase 4.2 source features and pending acceptance. At that time, detailed Mystery Who parity was still blocked pending the local reference report; this historical status was superseded when the report was supplied on 2026-11-04.
+
+### Verification
+- All current TS/TSX files passed TypeScript transpile syntax parsing; `App.css` and `index.css` passed PostCSS parsing.
+- Focused Node 22 domain smoke checks passed for GuessUp team/deadline/scoring transitions, strict content exclusion/history, I Have Never response validation/points, and roulette landing geometry.
+- The Bun test suite, Oxlint, full semantic TypeScript check, Vite production build, and browser/device acceptance were not run because Bun/dependencies/browser tooling are unavailable in this environment. These checks remain pending.
+- **Historical status at this entry:** Exact Mystery Who classic parity was blocked because the local reference report had not yet been supplied. This was superseded by the 2026-11-04 report archive and report-derived local implementation/documentation; the report still leaves Troll Mode and elimination/win/tie resolution undefined.
+
+### Fixed — 2026-11-04: Phase 4 build and React Compiler diagnostics
+
+- Removed the unused `wheelAngleForPlayer` import and the non-component re-export from `PlayerWheel.tsx`; the roulette helper remains exported from its domain module, where application code and tests import it directly.
+- Removed render-time ref reads/writes from `PlayerWheel`; the animation duration is now a direct, validated CSS custom property from the current prop.
+- Removed setup effects that copied pack selection, GuessUp preferences, and team assignments into duplicate React state. Pack IDs are validated against the current game, team assignments are derived for newly added players, and GuessUp preferences are edited directly through the persisted settings callback.
+- Moved the GuessUp tilt callback ref update into an effect, derived whether tilt input is active from the selected input mode, and removed the synchronous state-reset effect.
+- Reworked wheel animation timing so `Date.now()` is evaluated in an effect rather than during render. Wheel completion and GuessUp countdown effects now declare their active-session and callback dependencies; `patchActive` and content selection use stable callbacks where required.
+- Corrected the service-worker asset-reference regular expression. The previous over-escaped slash sequence made `public/sw.js` invalid JavaScript and prevented browsers from installing the offline worker.
+- Kept the existing roulette geometry tests and project dependencies unchanged. No package manager, lockfile, or product scope changes were made.
+
+### Verification
+- The user-provided `bun run check` log showed repository policy passing, Oxlint completing with 14 warnings and 0 lint errors, then TypeScript failing on the unused `wheelAngleForPlayer` import (`TS6133`). Tests and build were not reached in that run.
+- After remediation, all 50 `.ts`/`.tsx` source and test files passed a TypeScript transpilation/syntax scan with 0 diagnostics.
+- A fresh `tsc -b` attempt could not start semantic checking because this environment has no installed project dependencies or `vite/client` and `node` type packages. Bun, Oxlint, Vite, and the React type packages are unavailable here, so a fresh `bun run check`, lint run, test run, and production build are **not claimed**.
+- `node --check public/sw.js` passes after the service-worker regex correction; the three application CSS files also parse successfully with PostCSS.
+- Browser/device interaction and accessibility checks remain pending. Run `bun install --frozen-lockfile` followed by `bun run check` in the project toolchain before treating the fixes as CI-verified.
+
+## 2026-11-04 — Zero-warning lint follow-up
+
+- Memoized GuessUp feedback and card-scoring actions with their actual state dependencies; the tilt listener now consumes the current scoring callback directly and re-registers only when that callback or tilt mode changes. This removes the unstable `markCard` effect dependency and avoids a render-time callback-ref synchronization effect.
+- Extracted active-session patching into a pure `patchActiveSave` state updater and explicitly declared the stable React state setter dependency so React Compiler can preserve the callback memoization.
+- Verification target: `bun run check` must complete with zero Oxlint warnings, zero TypeScript errors, all tests passing, and a successful production build.
+- The supplied latest run before these edits had 2 Oxlint warnings, 0 lint errors, 58 passing tests, successful typecheck and successful production build. The post-fix full pipeline is pending execution in an environment with Bun and installed dependencies.
+
+## 2026-11-04 — Final React Compiler warning fix
+
+- Removed the unnecessary manual `useCallback` wrapper from `patchActive`; the React Compiler is responsible for automatic memoization, avoiding the `react(preserve-manual-memoization)` warning caused by the hand-maintained dependency list.
+- Removed the effects' dependency on that render-local helper by applying `patchActiveSave` directly inside functional `setSave` updates.
+- Added active-snapshot identity guards to roulette completion and GuessUp countdown callbacks. A delayed timer now becomes a no-op if the active session changed before it fired, preventing an old timer from overwriting a newly launched or resumed game.
+- This change only affects state-update plumbing; game rules, saved-state shape, persistence format, and public component props are unchanged.
+
+
+## 2026-11-04 — Mystery Who local implementation completion pass
+
+### Added / changed
+- Added `docs/mystery-who-local-reference.md` to preserve the user-supplied report's local rules, role information boundaries, modes, phase transitions, voting threshold, content constraints, and explicitly undefined outcomes. Online mode is excluded.
+- Aligned the rules engine and setup cap to the report's 3–5 / 6–10 / 11–15 / 16–20 Mystic bands, preserving a Civilian and exactly one Mr. White in Mystics mode. Chaos still uses 1–3 Mystics and the documented 45% Mr. White chance for 4+ players.
+- Added normalized unique player-name validation, roster maximum checks, malformed vote-record rejection, a 3–20 saved player-order bound, exact ballot cardinality checks, and integrity validation before mutating vote state or calculating Mr. White thresholds. Legacy single-target ballots are accepted only for one-Mystic rounds.
+- Mystic hints that reveal the answer are rejected by the engine and custom-pack validator. Custom hints must be 1–20 non-empty distinct strings; secret words must be unique under project canonicalization.
+- Implemented approved adaptive player/category windows; Imposter word selection now applies category cooldown and per-category recent content while retaining the hard global last-10 stable-ID and normalized-text exclusions. Fixed category-history FIFO handling so a category selected after cooldown relaxation moves to the newest queue position.
+- Expanded built-in Imposter content from 600 to 1,800 concrete answers, 60 per each of 30 categories. Canonicalization review found and removed one `Doormat` / `Door mat` duplicate.
+- Tightened the custom pack UI instructions and centralized setup Mystic-count calculation through the domain rule function. Replay uses the saved setup snapshot, and invalid current round configurations are surfaced as a safe toast rather than escaping as an unhandled exception.
+- Updated project README, requirements, tests, checklist, TODO, verification, and this changelog.
+
+### Verification
+- Node 22 compatibility harness: 28 targeted tests passed / 0 failed across Imposter rules, custom-pack parsing, bundled seed content, and adaptive random selection.
+- Standalone strict TypeScript check passed for the modified domain/content modules. TypeScript transpilation syntax scan passed for all 55 TS/TSX source/test files with 0 diagnostics.
+- Canonical content audit: 30 Imposter category packs, 1,800 answers, 60 answers per pack, zero canonical duplicate answer strings.
+- Full Bun/Oxlint/typecheck/test/build pipeline and browser/device acceptance were not run because Bun and project dependencies are unavailable in this authoring environment.
+
+### Remaining scope
+- The built-in catalogue currently provides four shared category-safe hints per answer; twenty distinct word-specific hints for every built-in word still require content authoring and semantic QA. Custom categories accept 1–20 distinct word-specific hints.
+- Optional AI generation requires the separate approved Elysia/Bun provider gateway and current provider/model verification.
+- Troll Mode effects and faction elimination/win outcomes are not specified in the Mystery Who report and remain intentionally unimplemented. Online multiplayer remains excluded.
+
+
+## 2026-11-04 — Mystery Who implementation continuation and consistency fixes
+
+- Expanded the local Mystery Who answer catalogue to 1,800 unique answers (30 categories × 60) and added a canonicalized uniqueness assertion. Replaced the discovered `Doormat` / `Door mat` collision with a distinct answer. Each bundled entry currently uses four shared category-safe hints; 20 word-specific hints per entry remain a content-authoring/QA gap and were not padded with generic filler.
+- Added the complete local report-derived role and phase rules to `docs/mystery-who-local-reference.md`; implemented/validated Mystic count bands, Chaos distribution constraints, the 45% Mr. White chance, private role information boundaries, timed discussion, voting and final-guess threshold. Online mode is excluded.
+- Added stricter normalized player-name validation, saved ballot cardinality/order/roster validation, explicit custom pack JSON/TXT parsing, 1–20 hint validation, canonical duplicate-word/hint rejection, and answer-disclosure checking that catches punctuation and answer phrases embedded in longer hints. Runtime round creation rejects more than 20 hints and canonicalizes duplicate hint strings.
+- Implemented uniform category-first word selection with adaptive category cooldown, a persistent category FIFO, strict global last-10 normalized word exclusions, and per-category recent word queues. The adaptive player selector is also the production default for player roulette.
+- Corrected a stale shared-contract seed test: the catalogue now has 30 separate Imposter category packs plus the other game packs, not exactly four total packs. The test now validates all four game IDs and all 30 Imposter packs.
+- Replaced the nonfunctional AI provider selector / endpoint textbox / fake connection check with an explicit unavailable-state card. The secured Elysia/Bun gateway is not implemented in this build; no provider keys are accepted or persisted.
+- Updated the README, frontend README, requirements, instructions, backlog, acceptance checklist, gameplay reference, AI queue notes, test catalogue, and verification record to remove stale 600-word/fixed-three claims and distinguish local implementation from unimplemented AI integration.
+
+### Verification performed
+- Complete source test files (12 `.test.ts` files) executed through a Node 22 compatibility shim for `bun:test`: **84 passed, 0 failed**. This is a compatibility harness, not the Bun runner.
+- Standalone strict TypeScript typecheck passed for the Imposter domain, custom pack parser, adaptive selector, bundled content, shared contracts, and their non-test dependencies.
+- All 54 current TS/TSX source files passed TypeScript transpilation/syntax parsing with zero syntax diagnostics. All three application CSS files parsed with PostCSS; `public/sw.js` passed `node --check`.
+- Full `bun run check`, Oxlint, semantic frontend TypeScript project build, Vite production build, browser/mobile/device tests, and accessibility testing remain unexecuted because Bun and the project's dependency installation are not available in this authoring environment. No zero-warning or full CI pass is claimed.
+- Remaining explicitly open work: AI generation + secure Elysia gateway and provider adapters; word-specific 20-hint authoring per bundled word; human semantic review of all 1,800 answers; Troll Mode / faction elimination and win rules not specified by the report; and browser/device/official CI acceptance.
+
+
+## 2026-11-04 — Imposter setup type-safety and lint remediation
+
+### User-provided verification evidence
+- The latest `bun run check` log shows repository policy passing and Oxlint finishing with 3 warnings and 0 errors. All three warnings are unused `max` parameters in deterministic callbacks in `src/domain/games/imposter.test.ts`.
+- TypeScript then reports 4 errors: two updater objects explicitly assign `imposterPreferences: undefined` despite `exactOptionalPropertyTypes`; the round factory receives optional `ImposterSetup` properties as explicit `undefined`; and `ImposterGame` reads `setupSnapshot` from `ImposterRoundState`, where that application-level metadata was not declared. Tests and build were not reached in that run.
+
+### Source fixes
+- Normalize partial/legacy Imposter setup snapshots with the saved/default preferences before starting a local Imposter round. This guarantees a complete `ImposterSetup` for the round factory and for the replay snapshot.
+- Capture the narrowed setup value before passing it to the React state updater, avoiding accidental widening to `undefined`.
+- Keep optional save properties truly optional: the recent-history updater conditionally spreads `imposterPreferences` instead of writing the property with an undefined value.
+- Pass the complete, normalized Imposter configuration to `createImposterRound`, so exact optional property typing is respected without weakening `tsconfig` or changing the domain contract.
+- Model `setupSnapshot` as optional application-level metadata intersected with the domain round state in `ImposterGame`; this preserves the persisted replay behaviour without polluting the reusable Imposter domain type with UI setup dependencies.
+- Replace unused `max` test callback parameters with zero-argument deterministic callbacks.
+
+### Verification status
+- Source-level checks confirm that optional setup fields are normalized before round creation, optional persistence fields are conditionally written, replay metadata is typed explicitly at the UI boundary, and all three unused test parameters have been removed.
+- Bun, Oxlint, and project dependencies are not installed in this authoring environment. A fresh `bun run check` (including semantic TypeScript, tests and production build) has therefore **not** been executed here. The user-provided log is pre-fix evidence, not a post-fix pass.
+- The pinned project configuration and strict compiler options are unchanged. No `any` casts were added to suppress these errors, and `exactOptionalPropertyTypes` was not weakened.
+- **Additional local validation after the fix:** global TypeScript transpilation parsed all 54 TS/TSX source and test files with 0 syntax diagnostics. A standalone strict TypeScript regression snippet covering `GameSetup` normalization, complete `ImposterOptions`, and `Save`'s exact optional-property behavior passed with `--strict --exactOptionalPropertyTypes`. A full `tsc -b` attempt remains blocked before project compilation because `vite/client` and `node` type packages are absent.
+
+
+## 2026-11-04 — Phase 2 and Phase 3 implementation completion pass
+
+### Persistence and offline (Phase 2)
+- Added normalized restore boundaries for app state, including roster uniqueness, bounded queues/history/active JSON, and safe preference defaults/ranges.
+- Hardened IndexedDB snapshot metadata/schema validation and history timestamp retention; handled blocked-open races and exposed truthful memory-only fallback/retry.
+- Completed full backup export/import validation: supported envelope/schema, timestamps, total custom-content cap, unique IDs, normalized state, explicit destructive confirmation, and atomic five-store restore with revision CAS.
+- Added memory-only export that uses the live tab state rather than accidentally exporting an older IndexedDB snapshot. Storage retry re-saves in-memory custom packs before enabling normal persistence.
+- Added confirmed force-reset recovery for corrupt/unreadable stores; ordinary reset continues to use revision compare-and-swap. Custom-pack create/delete and data erase remain available in memory-only mode with clear durability messaging.
+- Legacy localStorage is removed only after IndexedDB is confirmed available; stale legacy keys are cleaned after a later successful boot as well.
+- Added Vite-generated `precache-manifest.json` so offline installation includes lazy game chunks, styles, fonts, and emitted image assets—not only the entry assets visible in HTML.
+- Upgraded service worker cache to v4; added strict same-origin asset manifest checks, precached-asset protection, bounded runtime cache, API/external/non-GET exclusion, safe namespace cleanup, and navigation fallback.
+
+### Shared UI foundation (Phase 3)
+- Synchronized persisted light/dark theme with document theme/color-scheme and browser theme-color; applied motion preference before initial render to reduce visual flash.
+- Added accessible screen title updates, main landmark label/focus target, 44px narrow-screen navigation controls, dynamic viewport sizing, forced-colors focus behavior, and in-app/system reduced-motion coverage for JS-driven transition durations.
+- Confirmed all game components remain independently lazy-loaded with a loading status and recoverable chunk error boundary. Removed external font network dependencies in favor of local system font stacks.
+- Audited the current native dialog/forms/shared primitives; no new UI dependency was justified, but the approved Bun package/icon-library policy remains documented.
+
+### Tests and evidence
+- Added application save normalization cases, stricter backup-envelope/memory-export cases, and service-worker tests for installation, lazy chunk precache, cache cleanup, API/non-GET boundaries, runtime cap, and offline navigation.
+- Node 22 service-worker integration smoke passed for the above runtime behavior; `public/sw.js` passed `node --check`.
+- Global TypeScript transpilation parsed 57 TS/TSX files with zero syntax diagnostics. This is syntax-only evidence, not semantic project typechecking.
+- Bun/Oxlint/semantic `tsc -b`/Vite production build and real browser/IndexedDB/device/assistive-technology acceptance could not be executed because the environment lacks Bun and installed frontend dependencies. These exit criteria remain pending in `verification.md` and `checklist.md`.
+
+
+## 2026-11-04 — Phase 2/3 final recovery and cache-isolation fixes
+
+- Added atomic custom-pack collection reconciliation for storage recovery; validates the 200-pack / 5,000-item limits and rejects duplicate IDs before opening IndexedDB. Retry now includes removals performed in memory-only mode instead of reviving deleted packs.
+- Made confirmed local-data erasure wait for queued writes, preserve revision-conflict protection, and attempt a confirmed force-reset after storage failures while clearly reporting when persistent erasure is still unavailable.
+- Service worker v4 now resolves runtime assets and offline navigation only from its own King-Fun cache, preventing collisions with unrelated same-origin app caches. Updated the worker integration test fixture to v4 and added cross-cache isolation coverage.
+- Updated service-worker regression fixtures to v4 and added cross-cache isolation coverage; expanded Phase 2 requirements, backlog, checklist, test catalogue, and verification records.
+- Corrected the section numbering in `instructions.md` after insertion of the persistence and accessibility policies.
+
+**Validation status:** 58 TypeScript/TSX syntax parses passed; 3 CSS files parsed; service worker passed `node --check`; targeted strict TypeScript 5.8 storage-core check passed; 21 targeted tests passed under a Node 22 compatibility runner; service-worker v4 integration smoke passed; 13 Markdown files passed relative-link validation. Bun/Oxlint/Vite and real-browser IndexedDB/accessibility tests remain unexecuted.
+
+
+## 2026-11-04 — Screen error-boundary TypeScript override fix
+
+- Applied the required TypeScript `override` modifier to `ScreenErrorBoundary.state`, `componentDidCatch`, and `render`, which override members inherited from `React.Component`.
+- Left strict compiler settings unchanged; no diagnostics were suppressed and no runtime behavior was changed.
+- User-provided verification evidence: repository policy and Oxlint both pass with 0 warnings / 0 errors. The project typecheck then reports TS4114 for these three missing modifiers.
+- Post-fix verification in this environment: source syntax and exact override-member assertions are checked; full `bun run check` must be rerun in the user's Bun environment because Bun and installed project dependencies are not available here.
+
+## 2026-11-04 — KING-FUN branding and dual Truth or Dare wheels
+
+- Added the user-supplied crown-and-dice logo source at `docs/branding/king-fun-logo-source.svg` and optimized transparent header/favicon PNGs plus padded-background 192px/512px PWA/app icon assets.
+- Updated the product wordmark, page title, favicon, Apple touch icon, PWA name/short name and manifest metadata to the exact `KING-FUN` brand.
+- Bumped the service-worker cache namespace to v5 and added all four transparent/header and padded PWA logo derivatives to offline pre-caching.
+- Added a persistent, deterministic two-outcome Truth/Dare wheel. Its chosen result is committed before animation and the matching prompt is drawn after the wheel lands.
+- Kept the existing manual TRUTH and DARE callbacks intact and available beneath the wheel; they are briefly disabled only while the spin result is being durably committed to prevent a state race.
+- Retained the separate player/next-player wheel for the `Spin the wheel` turn mode; clarified the setup copy so both decisions are explicit.
+- Generalized roulette landing geometry and added tests for both Truth/Dare outcomes, existing rotation and invalid segment bounds.
+- Corrected the challenge-wheel stage selector and heading so the second wheel is presented as the primary Truth/Dare decision, not a secondary option.
+- No new runtime dependency was added.
+
+
+## 2026-11-05 — Phase 5 AI gateway implementation
+
+- Added Elysia + Bun gateway routes for liveness, non-sensitive provider readiness, and single-provider content generation.
+- Added Gemini, Groq, and Cloudflare Workers AI adapters; server-owned model configuration; bounded request/response handling; normalized provider errors; server-generated IDs; and exact/canonical duplicate filtering.
+- Added session-memory-only BYOK settings for Gemini/Groq, persistent provider order/enabled preferences only, provider test actions, bounded fallback order, transient cooldowns, and local custom-pack saving for generated batches.
+- Added Vercel Bun/Elysia function routing, `vercel.json`, `.env.example`, and operator deployment guidance.
+- Security controls include exact-origin CORS, no-store responses, request limits, per-instance rate guard, timeout, AI kill switch, and no application request-body/key logging. A globally consistent edge rate-limit rule and production budget alerts remain operator deployment requirements.
+- Validation limitation: Bun is unavailable in the authoring environment. `bun.lock` has not yet been regenerated for the new Elysia dependency; run `bun install` with pinned Bun 1.4.4, commit the resulting lock, then run the full `bun run check`. No production secrets were supplied and no live deployment was performed.
+
+- Added local Vite proxy and `bun run dev:api` launcher; same-origin `/api` calls are excluded from the service-worker cache.
+- Added provider-adapter and route contract tests, including 20 distinct answer-safe hint count validation for AI Imposter word batches.
+
+## 2026-11-06 — UI finish, Truth or Dare wheel review, and theme pass
+
+- Reviewed Truth or Dare's existing `spin-wheel` flow: the saved player roster is spun first, then the separate Truth/Dare wheel runs. Confirmed the selected player ID/angle and challenge kind/angle are committed before their respective animations. Added release-contract assertions; no duplicate selection logic was added.
+- Added reusable named SVG `Icon` and `GameMark` components and replaced decorative text glyphs in core navigation, home game cards, setup mode selectors, pack cards, and wheel controls.
+- Removed pack/category emoji from visible pack and AI-category list iconography while retaining the legacy metadata field for import/export compatibility.
+- Expanded light-theme token and surface overrides across hero, resume, cards, setup, controls, dialogs, prompt surfaces, and wheel states; refined the theme toggle and roulette visual hierarchy.
+- Added component ownership comments and `docs/ui-architecture.md` for reusable component boundaries, dual-wheel flow, theme requirements, motion/accessibility rules, and future game-mode extension.
+- Added source regression contracts for dual-wheel sequencing, light-theme surface tokens, and shared icon usage.
+- External Lucide React/MUI/Radix/Framer Motion packages were not installed: Bun is unavailable in the authoring environment and registry DNS cannot resolve. The manifest and `bun.lock` were deliberately left consistent. The current update uses a first-party SVG wrapper and CSS motion; external library adoption remains open.
+- Native Bun pipeline and visual/browser acceptance remain pending on the exact archive.
+
+## 2026-11-06 — Responsive design-system and interaction overhaul
+
+- Rebuilt the shared app shell, game library, setup, settings, history, and gameplay surfaces around a coherent 12-column responsive layout with a 7/5 desktop setup split and mobile stacking behavior.
+- Expanded the central Lucide React icon registry and replaced remaining visible game-action arrows/replay glyphs with named SVG icons. Legacy emojis remain only as stored metadata, not product controls.
+- Standardized button variants with Base UI + CVA + `clsx`/`tailwind-merge`, accessible on/off switches, provider action controls, status panels, choice controls, progress indicators, empty states, and dialogs.
+- Added keyboard/pointer drag sorting and explicit keyboard reorder fallbacks for provider order; added Ctrl/Cmd+K command palette with protection for focused text-entry fields.
+- Applied Motion transitions and AutoAnimate to page/list feedback; added Sonner notifications, TanStack Query for gateway status, React Hook Form/Zod player validation, React Dropzone for local Imposter pack imports, and date-fns for history display.
+- Added Storybook 10 configuration and shared-controls stories; added fast-check property tests and Playwright responsive/input/theme/command-palette/provider-order/game-mode/axe coverage. GitHub Actions installs Chromium and runs the browser suite after the Bun quality gate.
+- Added UI architecture/package-boundary documentation and updated README, requirements, instructions, tests, checklist, todo, and verification records.
+- Heavy graphics/physics/audio/animation packages remain feature-scoped and must not be statically imported into the initial app route without a concrete gameplay requirement.
+- Validation in authoring environment: Node execution of the release-contract audit reports 48 checks passed; full Bun checks and actual browser E2E must still be run on the user's Bun 1.4.4 machine for this archive. No post-redesign bundle budget pass is claimed.
+
+## 2026-11-06 — Responsive design system and interaction overhaul
+
+- Rebuilt the app shell, library, setup, settings, history, shared controls, and game-stage presentation around shared semantic dark/light tokens and a 12-column responsive grid.
+- Centralised Lucide icons, accessible switches, Base UI buttons, status panels, dialogs, and reusable game marks; replaced remaining decorative action glyphs with named icons.
+- Added keyboard-first command navigation, draggable and keyboard-reorderable AI providers, animated screen/list transitions, schema-validated player entry, and drag/drop local pack import.
+- Applied React Query to gateway status and date-fns to local history presentation; added Storybook controls and Playwright responsive/axe coverage.
+- Added fast-check property tests and CI browser-test setup. Kept 2D/3D renderers and physics/audio toolkits feature-scoped rather than importing them into the core app.
+- Improved light-theme subtle text contrast on white surfaces.
+- Validation in this editing environment: 48 release-contract checks; syntax/config/link/icon audits. The user-provided pre-redesign Bun 1.4.4 log remains the only confirmed native full-pipeline run; rerun `bun run check` and `bun run test:e2e` after installing Chromium to validate this revision.
+
+
+## 2026-11-06 — Chromium E2E, focus, accessibility and final lint remediation
+
+- Fixed the last React Compiler ref warning in `SortableProviderRow`: `useSortable` now receives `transition: null`, while the row uses a CSS-owned transform transition. The rendered `transform` remains dnd-kit-driven; no ref-derived `sortable.transition` value is read during render.
+- Fixed the command-palette focus defect by focusing its `cmdk` input on the animation frame after the native dialog enters the modal top layer. Escape/cancel and outside-click behavior remain native-dialog based.
+- Fixed WCAG 2.5.3 label-in-name violations: brand and game buttons now derive their accessible names from visible child text; the icon-only quick-action button includes hidden action text and retains its visible `CTRL K` label in the computed name.
+- Raised the small-text subtle foreground token to `#7b8999` on dark panels and `#5e6e82` on light panels. The dark command shortcut key previously measured 4.23:1; the new dark token measures 4.64:1 on `#171f2b`, and the new light token exceeds 4.8:1 on the light panel surface.
+- Corrected the keyboard provider-order test to use exact visible provider names so the enabled-switch label no longer causes a Playwright strict-mode false failure. The actual arrow-button reorder behavior remains tested.
+- Made the 12-column browser test wait for the asynchronously bootstrapped game library before measuring computed grid columns, preventing a transient empty-DOM read at 320 px.
+- Corrected the browser E2E script contract: the root workspace delegates to the frontend workspace script; the Playwright command is asserted in `frontend/package.json`, not the root script.
+- Updated release-contract and Bun regression tests for modal focus, accessible labels, dnd-kit transition handling, contrast tokens and E2E hydration readiness.
+- User's latest Bun 1.4.4 run had 186/187 fast tests passing, with the sole test failure caused by the incorrect root-script assertion; the initial Playwright run had 9/13 passing and four failures (grid test hydration race, provider selector strictness, command palette focus, and home axe scan). These remediations are source changes; a new native rerun is still required.
+
+
+## 2026-11-06 — Follow-up E2E and accessible-name hardening
+
+- Moved command-palette lifecycle to a layout effect and focuses its search input immediately after `showModal()`, with a single animation-frame retry after native focus placement.
+- Linked brand and game-card button names directly to their visible brand/game headings; the tagline is exposed as the game-card description. The quick-action shortcut's visible `CTRL K` text now precedes its visually-hidden explanatory phrase in the accessible name, following WCAG 2.5.3 label-in-name guidance.
+- Made the responsive grid test re-check the live grid and all four cards after each viewport resize, and assert the container remains a CSS grid before collecting track/card geometry.
+- Strengthened release contracts and the home E2E test to verify the visible game title is the actual accessible button name.
+- Native Bun/Playwright rerun is still pending in the authoring environment; no full browser or production-build pass is claimed.
+
+- Follow-up refinement: command-palette focus now uses `useLayoutEffect`, focuses immediately after `showModal()`, and retries once on the next animation frame. Game-card accessible names reference their visible `<h3>` and descriptions reference their visible tagline. The responsive grid E2E now reads through a live locator scoped to the grid after each viewport change.
+
+## 2026-11-06 — Release pipeline and browser follow-up
+
+- Removed the eagerly loaded Motion runtime from the home and shell transitions; CSS now owns the equivalent lightweight entrance and hover states.
+- Lazy-loaded Setup, Settings, History, Command Palette, and confirmation dialog modules. Moved the TanStack Query client/provider into the lazy Settings module so it is not transferred on first load.
+- Replaced ref-sensitive dnd-kit sortable render props with native pointer drag-and-drop plus explicit keyboard-accessible move-up/move-down controls.
+- Corrected 320px header sizing, reserved provider identity space to keep names visible, expanded game-card accessible names to include the visible labels, and hardened the Ctrl/Cmd+K shortcut.
+- Added regression contracts for lazy entry boundaries and ref-free provider reordering.
+
+
+## 2026-11-06 — Release diagnostics follow-up
+
+- Removed the final render-time dnd-kit/ref path from provider sorting; provider order now uses native pointer drag-and-drop plus explicit keyboard move controls.
+- Deferred the bundled curated content bank and GuessUp/Imposter game-domain code until a game/setup is entered.
+- Split the small home-shell SVG icon registry from feature-screen icons and replaced the eager Sonner dependency with an accessible local toast surface.
+- Preserved visible home-card text in native button accessible names rather than overriding it with incomplete `aria-labelledby` references.
+- Hardened Ctrl/Cmd+K registration and native dialog search focus; added responsive root clipping, footer wrapping, and compact provider-switch labels.
+- Updated the release-contract and Playwright assertions to validate actual behavior and the current native sorting implementation.
+
+## 2026-11-06 — Final native diagnostic follow-up
+
+- Corrected the `CommandPalette` React Compiler immutability warning by storing both scheduled RAF IDs in effect-managed refs and cancelling them on cleanup.
+- Corrected the browser timer type mismatch in `AppShell` by using `number | null` for the `window.setTimeout` handle.
+- Reworked the provider enabled switch into a direct grid child and reserved a flexible visible identity track, removing the generic nested switch wrapper that hid provider names at narrow widths. The switch now references the visible provider and ON/OFF text for its accessible name.
+- Raised contrast of the four tiny hero-art labels to opaque white; calculated ratios against the previously failing backgrounds are 13.10:1–13.68:1.
+- Added regression checks for browser timer typing, palette frame cleanup, provider switch/identity layout, and hero label contrast. Native Bun and integrated Playwright/axe reruns remain pending on the exact revised archive.
+
+
+## 2026-11-06 — Final native-test and responsive accessibility remediation
+
+### Fixed
+- Made the service-worker cache identifier explicit as `king-fun-shell-v6`; the unit test now asserts the exact source constant and the install test continues to verify runtime cache creation.
+- Replaced the previous provider-row override stack with one authoritative grid-area layout. Gemini/Groq names use a dedicated `.provider-name` element in a reserved identity track; the switch, status and action controls have independent areas, and the pinned Cloudflare row has its own responsive areas.
+- Updated provider E2E to wait for actual visible Gemini/Groq names before viewport measurement and to measure `.provider-name` nodes rather than relying on the old strong selector.
+- Removed opacity-based fade-in from screen and game-card entrance keyframes. Entrance motion keeps its vertical movement but no longer blends text and CTA colours through low-contrast intermediate states during the axe scan.
+- Set explicit high-contrast home CTA colour pairs: dark theme lime with dark ink; light theme deep green `#4f7020` with white. Both pairs exceed 4.5:1 normal-text contrast.
+- Kept the four home token labels fully opaque white using a high-specificity design-system rule.
+- Added native E2E readiness assertions for lazy Settings content and home contrast.
+
+### Verification status
+- User-provided baseline for this patch: the earlier run showed 194/195 unit tests (only the service-worker source-literal assertion failed), and 11/13 Playwright tests (provider identity visibility and hero/CTA contrast failed). Earlier lint and semantic TypeScript checks were clean.
+- These source changes directly address those reported failures. Native lint/typecheck/test/audit/Vite build and integrated Playwright/axe reruns remain pending in the authoring environment and are not claimed as passing.
+
+
+### Service-worker cache follow-up — 2026-11-06
+
+- Bumped the cache namespace to `king-fun-shell-v7` because the final provider/layout and entrance-style changes alter the emitted shell asset graph. Updated cache unit/integration expectations, release-contract audit and frontend deployment documentation.
+
+
+## 2026-11-06 — Continuation cleanup after the v7 native log
+
+- Removed duplicate transform-only `kf-screen-enter` and `kf-card-enter` keyframe declarations while retaining a single definition of each.
+- Enforced opaque white hero-token labels in both the feature stylesheet and the application design-system override, avoiding a lazy-CSS cascade dependency.
+- Kept explicit dark and light CTA foreground/background pairs; focused Chromium checks confirm dark lime/dark-ink and light white/deep-green computed styles.
+- Consolidated the provider-list JSX indentation without changing its semantics: Gemini/Groq remain the only reorderable list items, while Cloudflare remains a separate pinned fallback group.
+- Updated release-contract tests to protect the exact v7 cache identifier, single transform-only entrance keyframes, and opaque token-label rules.
+- **Native verification status:** the user's most recent log recorded 194/195 unit tests (one stale cache-source assertion), with 11/13 Playwright tests (provider identity visibility and hero/CTA contrast still failing). The code/test changes address those exact diagnostics, but no new Bun 1.4.4 or integrated Playwright run has been executed against this current source revision.
+
+- Final contrast hardening: the primary home CTA no longer interpolates its foreground/background during theme changes. Hero art/token containers are explicitly fully opaque and unfiltered so text cannot be composited to a lower-contrast intermediate state.
+- Removed foreground/background colour tweening from the home primary CTA so a theme change cannot be sampled by axe during a low-contrast interpolation; its transform and shadow interactions remain animated.
+
+## 2026-11-06 — Follow-up to the latest service-worker, provider-visibility, and axe failures
+
+- Replaced the previous v6 cache-name template expression with the explicit `king-fun-shell-v7` constant. The service-worker source, activation cleanup, runtime cache assertions, unit test, release audit, and deployment docs now use the same cache identity. This makes the cache-version test deterministic and ensures clients discard the previous shell graph.
+- Kept Gemini and Groq as the only sortable entries in the labelled provider-priority list; Cloudflare remains a separately labelled pinned fallback. Each sortable row now places the provider identity in its own flexible grid area and the enabled control as a direct 44px switch grid item. The Playwright test waits for both provider identities before measuring responsive layout.
+- Applied opaque, theme-specific colours to the primary home CTA and hero-token text. Disabled foreground/background colour tweening on the CTA and opacity/filter effects on the hero tokens so the accessibility scan does not observe intermediate low-contrast animation frames.
+- The E2E accessibility scan remains enabled for home, settings, and setup; no axe rule or violation assertion was removed or downgraded.
+
+### Focused verification in the authoring container
+- Node release-contract audit passes 83/83 checks.
+- Chromium CSS/DOM fixture passes at 320, 360, 375, 390, 620, 768, 1024, and 1440 CSS px in dark and light themes: document width equals viewport width; Gemini, Groq, and pinned Cloudflare identities have non-zero visible boxes; both sortable rows fit their containers; 44px provider switches remain intact.
+- Chromium computed contrast: dark CTA 13.02:1; light CTA 5.72:1; WHO/ACT/SPIN/EVER labels 13.07:1–13.71:1.
+- This is a targeted CSS/DOM fixture, not the integrated React/Playwright/axe run. Bun 1.4.4 and installed workspace dependencies are not available in this authoring container, so native lint, semantic TypeScript checks, Bun tests, `bun audit`, real Vite output budgets, and full E2E remain unverified on this exact archive.
+
+
+## 2026-11-06 — Screenshot fixes and Social Gamebox research review
+### Fixed
+- Corrected the theme switch so the sun/moon glyph moves with the thumb rather than appearing detached.
+- Hardened responsive topbar sizing and mobile navigation; search and theme controls retain stable hit targets.
+- Added tablet hero-grid constraints and min-width guards for the copy/art columns.
+### Research and scope
+- Reviewed the complete supplied `deep-research-report.md`.
+- Recorded documented game candidates and distinguished fully described mechanics from inferred/underspecified titles.
+- Recorded the user's explicit request to expand beyond the original four games. New titles with documented mechanics are implementation work; report entries explicitly marked unclear/inferred remain deferred rather than receiving fabricated rules.
+- Flagged Share or Shot for age/content-safety review because the current product has no age gate.
+### Verification
+- Source/CSS changes inspected. Fresh Bun and Playwright runs remain pending because pinned workspace dependencies are not installed in this environment.
+
+## 2026-11-06 — Party Arcade game expansion
+
+### Added
+- Expanded the selectable catalogue from 4 to 27 game IDs (23 additions) while retaining the original four game modules.
+- Added complete local controllers for Timer Impostor; Werewolf; Mafia; Murder; Fake It; Fake Story; Fact or Fiction; Wrong Answers Only / Opposites Day; Hot Bomb; Hot Bomb Duel; Who's Most Likely; Would You Rather; Share or Pass; `$20 Challenge`; Tilt It; Letterburg; Discussion Starter; Who Am I?; Ten Tangle; Qupid; Questions for Love; A or B; and Reverse Singing.
+- Added Werewolf/Mafia hostile-count and phone-narrator settings; configurable Hot Bomb fuse; Tilt It/Letterburg team and solo modes with turn duration; Wrong Answers Only read-aloud; `$20 Challenge` anti-items filter; Reverse Singing Classic/Battle.
+- Added original bundled prompt, word, identity and themed auction content. Fake It answers and Fact or Fiction true/false verdicts are stored as validated content metadata.
+- Added ten theme-specific `$20 Challenge` lots per theme, sealed bid flow, player budgets, local judging and tie handling.
+- Added Reverse Singing microphone recording, reverse playback and classic/battle loops. Audio is held in browser memory only and is not uploaded or backed up. Recorder callbacks and microphone tracks are stopped on unmount.
+- Added reusable `PartyGameUI` primitives and separated the game controllers by interaction family.
+- Added domain tests for voting, team/solo scoring, auction settlement, faction terminal conditions, anagram shuffle and all 23 session constructors.
+- Added `docs/party-arcade-game-specs.md` with mechanics, source boundaries, player ranges, options and acceptance gates.
+- Added an explicit finish action to Tilt It team matches; tightened domain validation for unique rosters, required packs and bounded setup options.
+- Added theme-specific ten-item markets for every bundled `$20 Challenge` theme.
+- Bumped the service-worker cache namespace to `king-fun-shell-v8` for the updated lazy arcade module graph.
+
+### Product/safety boundaries
+- Preserved local pass-and-play. No remote rooms, accounts, chat, matchmaking, subscriptions, IAP or premium gating were introduced.
+- Implemented Share or Shot as Share or Pass; skip never incurs an alcohol/penalty mechanic.
+- Fake It mechanics are labelled as a KING-FUN interpretation because the source description is ambiguous.
+- Anti-items is an explicit KING-FUN local filter: value-2 lots are removed without spending player budgets. Exact reference-app cost/flow is not documented, so parity is not claimed.
+- `$20 Challenge` uses an offline group judge rather than requiring an AI call. Qupid's current 10 original prompts are not represented as a 1,000+ prompt replica.
+- Touchdown, Secret Suitcase and Comedy God remain excluded because the supplied report does not define their rules; Torment of Choice is treated as overlapping Would You Rather.
+
+### Verification
+- TypeScript/TSX transpile syntax pass: 86 source files, zero syntax diagnostics (semantic typecheck not run).
+- Node 22 runtime smoke: all 23 added arcade sessions created from actual seeded packs; verified 2,154 bundled content items across 60 packs; Fake It (10/10) and Fact or Fiction (10/10) metadata present.
+- Node release-contract audit: 83/83 checks passed.
+- Bun 1.4.4 lint, semantic TypeScript, Bun test suite, dependency audit, Vite build/budget and integrated Playwright/axe suite remain required; Bun and workspace dependencies are not installed in this authoring environment.
+
+- Refined Fake It to match the report's described secret-word / yes-no question loop (one private word-holder and one guess per other player); removed the earlier invented bluff-answer variant.
+- Refined Who Am I so the identity remains visible to the group during forehead play and each player can confirm a correct guess or pass without typing against the screen.
+
+- Corrected the Fake It setup copy to describe the secret-word and yes/no-question loop; updated catalogue descriptions for Fake It and Who Am I.
+
+- Aligned Tilt It motion gestures with the supplied mechanics: tilt down records a correct answer; tilt up passes. Updated UI feedback and setup/game documentation.
+
+
+### Follow-up game-flow integrity fixes
+- Fake It starter content now uses a broad category/clue with its answer held only in structured metadata; the group sees the cue during yes/no questions, not a trivia question that reveals the answer.
+- Mechanics-only Timer Impostor, Werewolf, Mafia and Murder no longer depend on an irrelevant prompt-pack selection in setup.
+- Removed an unused prop from the lazy arcade renderer and an unused memoized variable from the prompt controller.
+- Tilt It now disables motion input and stops recording when the deck ends; expired rounds reject late touch/motion submissions.
+- Added regression assertions for Fake It cue/answer separation and documented the refinements in requirements/specs.
+
+
+### 2026-11-06 — Party Arcade final quality pass
+- Updated the home hero and library eyebrow to report the live 27-game catalogue count instead of the superseded four-game copy.
+- Added generic 10-lot content for custom $20 Challenge themes; custom themes no longer inherit unrelated pirate-ship lots.
+- Fact or Fiction now interprets custom true/false metadata case-insensitively.
+- Reset the Werewolf/Mafia night-ballot cursor when leaving each night so saved state remains safe across repeated cycles.
+- Expanded release-contract coverage for the 27-title registry, mechanics-only setup, custom-market fallback, case-insensitive verdicts, multi-round voting, A-or-B rotation, private Fake It guesses and explicit Reverse Singing playback.
+- Added domain regression tests for uppercase Fact or Fiction verdicts and generic custom-theme auction markets.
+- Expanded Playwright smoke coverage to launch all 23 new game controllers with valid player counts; corrected the responsive grid assertion to measure all 27 game cards.
+
+
+## 2026-11-07 — Type, lint and browser-test remediation
+
+### TypeScript errors addressed
+- Omit optional `ArcadeContent.hints` when the source content has no hints, satisfying `exactOptionalPropertyTypes`.
+- Widen Tilt It's score transition result to a typed extensible record so team and solo score properties are valid.
+- Guard optional auction bidder IDs through a resolved numeric budget before indexing budget maps.
+- Type poll result rows and normalized numeric vote counts explicitly.
+- Guard optional Who Am I player IDs before indexing the assignment map.
+- Add the missing night-phase content child and remove the redundant `murder` comparison already covered by the `votingGame` guard.
+- Remove the unused Word Arcade state and Tilt It counter.
+
+### Oxlint warnings addressed in source
+- Replace render-time `Date.now()` state initializers with a shared cached `useSyncExternalStore` clock.
+- Use stable empty collection fallbacks for Hot Bomb's memoized answer/strike calculations and $20 Challenge standings.
+- Include the selected Hot Bomb variant in the fuse effect dependencies and include the full auction lot in the anti-items effect dependencies.
+- Replace effect-driven reset state updates in the prompt and deduction controllers with local UI state keyed to phase and turn.
+- Replace Tilt It's synchronous deadline-expiry effect with a scheduled timeout that commits when the persisted deadline arrives.
+
+### Browser tests corrected
+- The all-games smoke test now waits for React to commit every player removal/addition instead of mutating its local count optimistically.
+- The multi-prompt Would You Rather test now targets the rendered `.party-option` controls and uses the current displayed voter count instead of assuming a grid wrapper and four voters.
+- Increased the all-controller smoke-test timeout to five minutes to account for the full 23-game launch loop.
+
+### Verification in this authoring environment
+- TypeScript transpile/syntax pass: 87 TS/TSX files parsed; zero syntax diagnostics.
+- Node release-contract audit: updated assertions pass (see `verification.md`).
+- Project package JSON files parse successfully.
+- Bun 1.4.4, node workspace dependencies and Oxlint are not installed here; the full semantic typecheck, Oxlint, Bun unit suite, dependency audit, Vite production build and integrated Playwright/axe tests could not be rerun. These are still required on the user's Bun workspace before release certification.
+
+- Follow-up hardening: initialize the shared clock snapshot during subscription, outside React render, so restored countdowns display the correct elapsed time immediately rather than waiting for the first 80 ms tick.
+
+- Private-state follow-up: Hot Bomb answer drafts are keyed to the active holder/explosion, and Werewolf/Mafia local ballot selections include the night counter so selections cannot leak into a later cycle that reuses the same phase/index.

@@ -1,0 +1,54 @@
+{
+  "name": "king-fun",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "packageManager": "bun@1.4.4",
+  "engines": {
+    "bun": ">=1.4.4"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "bun run --filter @king-fun/frontend dev",
+    "dev:backend": "bun --env-file=.env --watch backend/dev.ts",
+    "build": "bun run --filter @king-fun/frontend build && bun run check:build-budget",
+    "preview": "bun run --filter @king-fun/frontend preview",
+    "check:policy": "bun run scripts/check-repo-policy.ts",
+    "lint": "bun run --filter @king-fun/frontend lint && bun run --filter @king-fun/backend lint",
+    "typecheck": "bun run --filter @king-fun/frontend typecheck && bun run --filter @king-fun/backend typecheck",
+    "test": "bun test frontend/src backend/tests backend/security scripts",
+    "test:e2e": "bun run --filter @king-fun/frontend test:e2e",
+    "check": "bun run check:policy && bun run check:release-contracts && bun run lint && bun run typecheck && bun run test && bun run security:audit && bun run build",
+    "start:backend": "bun --env-file=.env backend/dev.ts",
+    "dev:backend:hot": "bun --env-file=.env --hot backend/dev.ts",
+    "check:release-contracts": "bun run scripts/check-release-contracts.mjs",
+    "check:build-budget": "bun run scripts/check-build-budget.mjs",
+    "security:audit": "bun audit --audit-level=moderate",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:android:init": "tauri android init --ci",
+    "tauri:android:dev": "tauri android dev",
+    "tauri:android:build": "tauri android build --ci",
+    "storybook": "bun run --filter @king-fun/frontend storybook",
+    "build:storybook": "bun run --filter @king-fun/frontend build:storybook"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
+    "@types/node": "^24.19.2",
+    "oxlint": "^1.91.0",
+    "typescript": "~7.0.2"
+  },
+  "overrides": {
+    "esbuild": "^0.28.2",
+    "glob": "^14.0.4",
+    "minimatch": "^11.0.5"
+  },
+  "trustedDependencies": [
+    "@tsparticles/engine",
+    "protobufjs"
+  ]
+}

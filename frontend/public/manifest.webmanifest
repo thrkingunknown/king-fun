@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "KING-FUN \u2014 Party Games",
+  "short_name": "KING-FUN",
+  "description": "KING-FUN \u2014 four local-first party games for your group.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101014",
+  "theme_color": "#101014",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/king-fun-app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/king-fun-app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

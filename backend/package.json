@@ -1,0 +1,32 @@
+{
+  "name": "@king-fun/backend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --env-file=../.env --watch dev.ts",
+    "start": "bun --env-file=../.env dev.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "oxlint . --ignore-pattern 'node_modules/**'",
+    "test": "bun test tests security"
+  },
+  "dependencies": {
+    "@elysia/cors": "^1.4.3",
+    "@elysia/cron": "^1.4.2",
+    "@elysia/jwt": "^1.4.2",
+    "@elysia/openapi": "^1.4.17",
+    "@elysiajs/bearer": "^1.4.4",
+    "@opentelemetry/api": "^1.10.0",
+    "@opentelemetry/sdk-node": "^0.301.0",
+    "@sentry/bun": "^11.11.0",
+    "@upstash/redis": "^1.41.0",
+    "drizzle-orm": "^0.45.4",
+    "elysia": "^1.4.31",
+    "pino": "^10.4.0",
+    "postgres": "^4.1.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11",
+    "pino-pretty": "^13.2.0"
+  }
+}
