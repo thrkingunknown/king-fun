@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { ContentItem, ContentPack } from './domain/shared/contracts.ts'
+import { IMPOSTER_CATEGORY_BANKS } from './content/imposter-categories.ts'
 import { StatusPanel } from './components/ui/StatusPanel.tsx'
 import { Icon } from './components/ui/Icon.tsx'
 import { AmbientBackground } from './components/ui/AmbientBackground.tsx'
@@ -589,8 +590,11 @@ export default function AppShell({ initialState, initialRevision, initialPersist
           setToast('All selected Imposter words are still in the last-10 history. Add another category or explicitly reset recent content history; no words were repeated.')
           return
         }
-        // Built-in/local words may not have per-word hints; Mystics still play using role/category context.
-        const wordHints = config.imposter?.mysticHintsEnabled !== false && Array.isArray(word.hints) && word.hints.length > 0 ? word.hints : []
+        const categoryFallbackHints = IMPOSTER_CATEGORY_BANKS.find(bank => bank.id === word.categoryId)?.hints ?? []
+        // Built-in/local words may not have per-word hints; use category hints as fallback so Mystics always get context.
+        const wordHints = config.imposter?.mysticHintsEnabled !== false
+          ? (Array.isArray(word.hints) && word.hints.length > 0 ? word.hints : categoryFallbackHints)
+          : []
         const shuffled = secureShuffle(save.players)
         const categoryLabel = gameContentPacks.find(pack => pack.id === word.packId)?.name ?? word.categoryId.replace(/[-_]+/g, ' ').replace(/\b\w/g, character => character.toUpperCase())
         let round: ReturnType<typeof createImposterRound>
