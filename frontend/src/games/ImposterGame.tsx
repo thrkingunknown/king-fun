@@ -93,6 +93,7 @@ export function ImposterGame({ active, players, patchActive, finish, startGame }
 
   const currentVoterId = order[voterIndex]
   const currentVoter = currentVoterId === undefined ? undefined : roundPlayers.find(player => player.id === currentVoterId)
+  const requiredVoteLabel = `${requiredVotes} suspected player${requiredVotes === 1 ? '' : 's'}`
   let voteProgress = { total: order.length, completed: 0, votes: Object.keys(votes).length, skipped: skippedPlayers.length, remaining: order.length }
   let voteIntegrityError = ''
   try { voteProgress = getImposterVoteProgress(data) } catch (error) { voteIntegrityError = error instanceof Error ? error.message : 'The saved vote state is invalid.' }
@@ -213,13 +214,13 @@ export function ImposterGame({ active, players, patchActive, finish, startGame }
     </> : active.phase === 'voting' ? <>
       <span className="eyebrow">PRIVATE VOTE · PLAYER {Math.min(voterIndex + 1, order.length)} OF {order.length}</span>
       <h1 className="page-title">Hand the phone<br />to <em>{currentVoter?.name ?? 'the next voter'}.</em></h1>
-      <p className="lead">Select exactly {requiredVotes} suspected player(s). You may vote for yourself. Your ballot is private and final.</p>
+      <p className="lead">Select exactly {requiredVoteLabel}. You may vote for yourself. Your ballot is private and final.</p>
       <ProgressBar className="imposter-vote-progress" value={voteProgress.completed} max={voteProgress.total} label="Votes submitted" valueText={`${voteProgress.completed} of ${voteProgress.total} players have voted or skipped`} />
       {(voteError || voteIntegrityError) && <p className="form-error" role="alert">{voteError || voteIntegrityError}</p>}
       {!currentVoterId || !currentVoter || Boolean(voteIntegrityError) ? <div className="secret-card" role="alert"><h2>Voting handoff unavailable</h2><p>{voteIntegrityError || 'The current voter could not be found in this saved round. Exit and restart the round to continue safely.'}</p></div> : <>
         <div className="vote-list" role="group" aria-label={`Choose ${requiredVotes} suspected players for ${currentVoter.name}'s ballot`}>
           {roundPlayers.map(player => <button type="button" className={`vote-row vote-choice${selectedTargets.includes(player.id) ? ' is-selected' : ''}`} key={player.id} aria-pressed={selectedTargets.includes(player.id)} onClick={() => { setSelectedTargets(current => current.includes(player.id) ? current.filter(id => id !== player.id) : current.length < requiredVotes ? [...current, player.id] : current); setVoteError('') }}>
-            <b>{player.name}</b><span>{selectedTargets.includes(player.id) ? <><Icon name="check-circle" size={14} /> Selected</> : 'Select'}</span>
+            <b>{player.name}</b><span className="vote-choice-status">{selectedTargets.includes(player.id) ? <><Icon name="check-circle" size={14} /> Selected</> : 'Select'}</span>
           </button>)}
         </div>
         <button className="primary" disabled={selectedTargets.length !== requiredVotes} onClick={submitVote}>

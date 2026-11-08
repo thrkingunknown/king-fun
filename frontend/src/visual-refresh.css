@@ -398,6 +398,78 @@
   box-shadow: 0 10px 24px color-mix(in srgb, var(--kf-accent), transparent 78%);
 }
 
+.imposter-stage .discussion-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  text-align: center;
+}
+
+.imposter-stage .discussion-summary > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.imposter-stage .discussion-summary strong {
+  color: var(--kf-text);
+  font-size: 15px;
+}
+
+.imposter-stage .vote-list {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.imposter-stage .vote-choice {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--kf-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--kf-panel-2), transparent 8%);
+  color: var(--kf-text);
+  text-align: left;
+  transition: border-color var(--kf-motion-standard), background var(--kf-motion-standard), transform var(--kf-motion-standard);
+}
+
+.imposter-stage .vote-choice:hover,
+.imposter-stage .vote-choice:focus-visible {
+  border-color: color-mix(in srgb, var(--kf-accent), var(--kf-line) 45%);
+}
+
+.imposter-stage .vote-choice:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--kf-accent), transparent 40%);
+  outline-offset: 2px;
+}
+
+.imposter-stage .vote-choice.is-selected {
+  border-color: color-mix(in srgb, var(--kf-accent), var(--kf-line) 35%);
+  background: color-mix(in srgb, var(--kf-accent), var(--kf-panel) 86%);
+}
+
+.imposter-stage .vote-choice-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--kf-line);
+  border-radius: 999px;
+  color: var(--kf-muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.imposter-stage .vote-choice.is-selected .vote-choice-status {
+  border-color: color-mix(in srgb, var(--kf-accent), transparent 45%);
+  color: var(--kf-accent);
+}
+
 @media (max-width: 620px) {
   .api-category-maker { grid-template-columns: 1fr; }
   .imposter-stage { margin-top: 20px; padding-inline: 8px; }

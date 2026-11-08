@@ -9,6 +9,50 @@ const SOURCE = 'project-original:seed-pack-v1'
 const CREATOR = 'party-game-portal'
 const DEFAULT_SUITABILITY: Suitability = 'general'
 
+const IMPOSTER_CATEGORY_CLUES: Readonly<Record<string, string>> = {
+  Animals: 'Living creature',
+  Fruit: 'Edible produce',
+  'Food & Drinks': 'Prepared dish',
+  Objects: 'Physical item',
+  Celebrities: 'Public figure',
+  Cities: 'Urban location',
+  Countries: 'Nation state',
+  'Body & Health': 'Body feature',
+  Brands: 'Consumer label',
+  Hollywood: 'Film performer',
+  Games: 'Playable title',
+  Locations: 'Specific place',
+  'Film & TV': 'Screen story',
+  Anime: 'Animated title',
+  Professions: 'Work role',
+  School: 'Learning topic',
+  Sports: 'Athletic activity',
+  Football: 'Football term',
+  Fantasy: 'Imagined thing',
+  'Fashion & Clothes': 'Clothing item',
+  Technology: 'Digital device',
+  Traveling: 'Travel item',
+  'World & Places': 'Famous landmark',
+  Summer: 'Warm-weather item',
+  Music: 'Musical item',
+  'Jobs & Crafts': 'Hands-on craft',
+  'Daily Life': 'Everyday item',
+  'Adults Only': 'Adult responsibility',
+  Superheroes: 'Comic-book hero',
+  'Weather & Nature': 'Natural feature',
+}
+
+function getSeededImposterHints(word: string, categoryName: string): readonly string[] {
+  const letters = [...word.normalize('NFKC').matchAll(/[\p{L}\p{N}]/gu)].length
+  const words = word.trim().split(/\s+/).filter(Boolean).length
+  const categoryClue = IMPOSTER_CATEGORY_CLUES[categoryName] ?? 'Category item'
+  return [
+    categoryClue,
+    `${letters} letters`,
+    words > 1 ? 'Multiple words' : 'Single word',
+  ]
+}
+
 type SeedDefinition = {
   readonly gameId: GameId
   readonly packId: string
@@ -318,7 +362,7 @@ for (const category of IMPOSTER_CATEGORY_BANKS) {
   category.words.forEach((text, index) => content.push(parseContentItem({
     id: ids[index], gameId: 'imposter', kind: 'word', text, locale: 'en', packId,
     categoryId: category.id, suitability: DEFAULT_SUITABILITY,
-    tags: ['imposter', category.id], hints: category.hints,
+    tags: ['imposter', category.id], hints: getSeededImposterHints(text, category.name),
     provenance: { source: SOURCE, license: LICENSE, creator: CREATOR, createdAt: CREATED_AT, reviewedAt: null },
   })))
   packs.set(packIdText, parseContentPack({ id: packId, gameId: 'imposter', name: category.name, description: category.description, locale: 'en', suitability: DEFAULT_SUITABILITY, version: 1, contentIds: ids, isDefault: true }))
