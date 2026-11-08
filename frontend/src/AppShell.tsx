@@ -589,10 +589,8 @@ export default function AppShell({ initialState, initialRevision, initialPersist
           setToast('All selected Imposter words are still in the last-10 history. Add another category or explicitly reset recent content history; no words were repeated.')
           return
         }
-        if (config.imposter?.mysticHintsEnabled !== false && (!word.hints || word.hints.length === 0)) {
-          // Built-in/local words may not have per-word hints; Mystics still play using role/category context.
-          word = { ...word, hints: [] }
-        }
+        // Built-in/local words may not have per-word hints; Mystics still play using role/category context.
+        const wordHints = config.imposter?.mysticHintsEnabled !== false && Array.isArray(word.hints) && word.hints.length > 0 ? word.hints : []
         const shuffled = secureShuffle(save.players)
         const categoryLabel = gameContentPacks.find(pack => pack.id === word.packId)?.name ?? word.categoryId.replace(/[-_]+/g, ' ').replace(/\b\w/g, character => character.toUpperCase())
         let round: ReturnType<typeof createImposterRound>
@@ -604,7 +602,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
             mysticCount: imposterSetup.mysticCount,
             mysticHintsEnabled: imposterSetup.mysticHintsEnabled,
             sameMysticHint: imposterSetup.sameMysticHint,
-            hints: word.hints ?? [],
+            hints: wordHints,
             discussionTimerEnabled: imposterSetup.discussionTimerEnabled,
             discussionSeconds: imposterSetup.discussionSeconds,
             votingEnabled: imposterSetup.votingEnabled,
