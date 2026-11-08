@@ -1,12 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "bunVersion": "1.4.4",
+  "bunVersion": "1.4.x",
   "services": {
     "backend": {
       "root": "backend",
-      "framework": "elysia",
+      "runtime": "bun",
       "entrypoint": "vercel.ts",
-      "installCommand": "bun install --frozen-lockfile",
+      "installCommand": "bun install",
       "functions": {
         "vercel.ts": {
           "maxDuration": 60
@@ -16,7 +16,7 @@
     "frontend": {
       "root": "frontend",
       "framework": "vite",
-      "installCommand": "bun install --frozen-lockfile",
+      "installCommand": "bun install",
       "buildCommand": "bun run build",
       "outputDirectory": "dist"
     }

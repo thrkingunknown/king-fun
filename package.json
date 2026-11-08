@@ -39,7 +39,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4",
     "@types/node": "^24.19.2",
-    "oxlint": "^1.91.0",
+    "oxlint": "^1.92.0",
     "typescript": "~7.0.2"
   },
   "overrides": {
