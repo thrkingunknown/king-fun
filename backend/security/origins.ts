@@ -1,6 +1,6 @@
 /** Build an exact CORS origin allowlist. Production never inherits local origins. */
-export function parseAllowedOrigins(value: string | undefined, production: boolean): ReadonlySet<string> {
-  const source = value ?? (production ? '' : 'http://localhost:5173,http://127.0.0.1:5173')
+export function parseAllowedOrigins(value: string | undefined, production: boolean, inferredOrigins: readonly string[] = []): ReadonlySet<string> {
+  const source = [value ?? (production ? '' : 'http://localhost:5173,http://127.0.0.1:5173'), ...inferredOrigins].join(',')
   const origins = new Set<string>()
   for (const candidate of source.split(',').map(origin => origin.trim()).filter(Boolean)) {
     try {

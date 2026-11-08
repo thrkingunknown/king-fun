@@ -11,7 +11,10 @@ import { constantTimeTokenDigest, isCreatorUnlockConfigured, issueCreatorToken, 
 import { createHash } from 'node:crypto'
 
 const env = process.env as NodeJS.ProcessEnv & ProviderEnv
-const allowedOrigins = parseAllowedOrigins(env.FRONTEND_ORIGINS, env.NODE_ENV === 'production')
+const inferredVercelOrigins = [env.VERCEL_PROJECT_PRODUCTION_URL, env.VERCEL_URL]
+  .filter((value): value is string => Boolean(value?.trim()))
+  .map(value => `https://${value.trim().replace(/^https?:\/\//, '')}`)
+const allowedOrigins = parseAllowedOrigins(env.FRONTEND_ORIGINS, env.NODE_ENV === 'production', inferredVercelOrigins)
 const allowedProviders = new Set<ProviderId>(['gemini', 'groq', 'cloudflare-workers-ai'])
 const maxBodyBytes = 12_000
 const feedbackBodyBytes = 2_000

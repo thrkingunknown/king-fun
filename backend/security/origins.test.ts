@@ -16,4 +16,11 @@ describe('gateway origin allowlist', () => {
     expect([...parseAllowedOrigins(undefined, false)]).toEqual(['http://localhost:5173', 'http://127.0.0.1:5173'])
     expect([...parseAllowedOrigins('http://localhost:5173, http://evil.example, https://preview.example', false)]).toEqual(['http://localhost:5173', 'https://preview.example'])
   })
+
+  test('production accepts inferred Vercel deployment origins alongside explicit origins', () => {
+    expect([...parseAllowedOrigins(undefined, true, ['https://king-fun-fun.vercel.app', 'https://king-fun-preview.vercel.app'])]).toEqual([
+      'https://king-fun-fun.vercel.app',
+      'https://king-fun-preview.vercel.app',
+    ])
+  })
 })
