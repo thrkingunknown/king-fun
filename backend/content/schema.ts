@@ -149,7 +149,7 @@ export function validateGeneratedItems(raw: unknown, input: GenerateInput): Gene
       if (!Array.isArray(row.hints) || row.hints.length !== 20 || row.hints.some(hint => typeof hint !== 'string')) continue
       const normalizedHints = row.hints.map(hint => (hint as string).trim().replace(/\s+/g, ' '))
       const hintKeys = normalizedHints.map(canonical)
-      if (normalizedHints.some(hint => !hint || wordCount(hint) > 2 || hint.length > 140 || hasControlCharacters(hint) || violatesContentGuard(hint, input.suitability))) continue
+      if (normalizedHints.some(hint => !hint || wordCount(hint) > 2 || hint.length > 40 || hasControlCharacters(hint) || violatesContentGuard(hint, input.suitability))) continue
       if (new Set(hintKeys).size !== 20 || normalizedHints.some(hint => containsAnswer(hint, text))) continue
       if (normalizedHints.some((hint, index) => normalizedHints.slice(index + 1).some(other => isNearDuplicateGeneratedText(hint, other)))) continue
       hints = normalizedHints

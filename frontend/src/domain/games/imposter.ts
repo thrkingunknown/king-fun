@@ -239,15 +239,23 @@ export function createImposterRound(
     if (key && !uniqueHints.has(key)) uniqueHints.set(key, hint)
   }
   const availableHints = [...uniqueHints.values()]
+    .map(hint => hint.trim().split(/\s+/).slice(0, 2).join(' '))
+    .filter(Boolean)
   const canonicalWord = canonicalizeContentText(word)
   if (availableHints.some(hint => canonicalizeContentText(hint) === canonicalWord || containsSecretWord(hint, word))) {
     throw new TypeError('A Mystic hint must not disclose the secret word.')
   }
-  const hintOrder = shuffle(availableHints, randomIndex)
+  const uniqueShortHints = new Map<string, string>()
+  for (const hint of availableHints) {
+    const key = canonicalizeContentText(hint)
+    if (key && !uniqueShortHints.has(key)) uniqueShortHints.set(key, hint)
+  }
+  const shortHints = [...uniqueShortHints.values()]
+  const hintOrder = shuffle(shortHints, randomIndex)
   const hints: Record<string, string | null> = {}
 
   mystics.forEach((id, index) => {
-    hints[id] = availableHints.length
+    hints[id] = shortHints.length
       ? hintOrder[options.sameMysticHint ? 0 : index % hintOrder.length] ?? null
       : null
   })

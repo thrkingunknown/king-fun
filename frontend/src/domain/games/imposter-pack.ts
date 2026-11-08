@@ -40,6 +40,9 @@ export function validateImposterPackEntries(input: readonly string[]): string[] 
     if (hints.length < 1 || hints.length > 20 || hints.some(hint => !hint)) {
       throw new Error(`Entry ${index + 1} needs 1–20 non-empty hints after the secret word.`)
     }
+    if (hints.some(hint => hint.split(/\s+/).filter(Boolean).length > 2)) {
+      throw new Error(`Each hint in entry ${index + 1} must be 2 words or fewer.`)
+    }
     if (hints.some(hint => hint.length > 240)) {
       throw new Error(`Each hint in entry ${index + 1} must be 240 characters or fewer.`)
     }

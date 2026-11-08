@@ -9,11 +9,15 @@ export interface GuessUpRoundOptions {
   readonly teamBName?: string
   readonly teamAPlayerIds?: readonly string[]
   readonly teamBPlayerIds?: readonly string[]
+  /** Optional separate deck for Team B; when omitted, Team B reuses `deck` for legacy compatibility. */
+  readonly deckB?: readonly string[]
 }
 
 export interface GuessUpRoundState {
   readonly deck: readonly string[]
+  readonly deckB?: readonly string[]
   readonly index: number
+  readonly indexB?: number
   readonly correct: number
   readonly pass: number
   readonly seconds: number
@@ -70,9 +74,11 @@ export function createGuessUpRound(
     throw new TypeError('Every player must be assigned to exactly one non-empty GuessUp team.')
   }
 
+  const deckB = options.deckB ? [...options.deckB] : undefined
+  if (deckB !== undefined && (deckB.length === 0 || deckB.some(card => !card.trim()))) throw new TypeError('GuessUp needs a non-empty Team B deck of readable cards.')
   const nameById = new Map(players.map(player => [player.id, player.name]))
   return {
-    deck: [...deck], index: 0, correct: 0, pass: 0, seconds: durationSeconds,
+    deck: [...deck], ...(deckB ? { deckB } : {}), index: 0, indexB: 0, correct: 0, pass: 0, seconds: durationSeconds,
     durationSeconds, endsAt: null, running: true, activeTeam: 'A', teamA: 0, teamB: 0,
     teamAName,
     teamBName,
@@ -108,14 +114,18 @@ export function reconcileGuessUpTimer(
 /** Advance exactly one visible card for the active team. */
 export function scoreGuessUpCard(state: GuessUpRoundState, result: GuessUpCardResult): GuessUpRoundState {
   if (!state.running || state.seconds <= 0) throw new Error('This GuessUp team round is not active.')
-  if (state.deck.length === 0) throw new Error('The GuessUp deck is empty.')
-  if (state.index >= state.deck.length) throw new Error('The shuffled GuessUp deck has been exhausted.')
-  if (result !== 'correct' && result !== 'pass') throw new TypeError('Unknown GuessUp card result.')
   const activeTeam: GuessUpTeam = state.activeTeam === 'B' ? 'B' : 'A'
+  const activeDeck = activeTeam === 'B' && state.deckB?.length ? state.deckB : state.deck
+  const activeIndex = activeTeam === 'B' && state.deckB?.length ? (state.indexB ?? 0) : state.index
+  if (activeDeck.length === 0) throw new Error('The GuessUp deck is empty.')
+  if (activeIndex >= activeDeck.length) throw new Error('The shuffled GuessUp deck has been exhausted.')
+  if (result !== 'correct' && result !== 'pass') throw new TypeError('Unknown GuessUp card result.')
+  const nextIndex = activeIndex + 1
   return {
     ...state,
     activeTeam,
-    index: state.index + 1,
+    index: activeTeam === 'A' ? nextIndex : state.index,
+    indexB: activeTeam === 'B' && state.deckB?.length ? nextIndex : (state.indexB ?? 0),
     correct: state.correct + (result === 'correct' ? 1 : 0),
     pass: state.pass + (result === 'pass' ? 1 : 0),
     teamA: state.teamA + (result === 'correct' && activeTeam === 'A' ? 1 : 0),
@@ -131,12 +141,12 @@ export function endGuessUpTeamRound(state: GuessUpRoundState): GuessUpTeamTransi
   return { phase: activeTeam === 'A' ? 'team-break' : 'complete', state: nextState }
 }
 
-/** Prepare Team B with the same shuffled deck and the configured duration. */
+/** Prepare Team B with a separate deck when available, otherwise the legacy shared deck. */
 export function startGuessUpTeamB(state: GuessUpRoundState): GuessUpRoundState {
   if (state.activeTeam !== 'A' || state.running || state.seconds > 0) {
     throw new Error('Team B can start only after Team A has finished.')
   }
-  return { ...state, activeTeam: 'B', index: 0, seconds: state.durationSeconds, endsAt: null, running: true }
+  return { ...state, activeTeam: 'B', index: state.deckB?.length ? state.index : 0, indexB: 0, seconds: state.durationSeconds, endsAt: null, running: true }
 }
 
 /** Prepare Team B for the same visible ready countdown used by the first team. */

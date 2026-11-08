@@ -18,8 +18,10 @@ type Props = Pick<GameViewProps, 'active' | 'players' | 'patchActive' | 'finish'
 export function GuessUpGame({ active, players, patchActive, finish, restart, reportPrompt }: Props) {
   const data = active.data
   const round = data as unknown as GuessUpRoundState
-  const deck = Array.isArray(data.deck) ? data.deck as string[] : []
-  const cardIndex = Number.isInteger(data.index) ? Math.max(0, data.index) : 0
+  const teamBDeckActive = data.activeTeam === 'B' && Array.isArray(data.deckB) && data.deckB.length > 0
+  const deck = teamBDeckActive ? data.deckB as string[] : (Array.isArray(data.deck) ? data.deck as string[] : [])
+  const rawIndex = teamBDeckActive ? (data.indexB ?? data.index) : data.index
+  const cardIndex = Number.isInteger(rawIndex) ? Math.max(0, Number(rawIndex)) : 0
   const hasCard = deck.length > 0 && cardIndex < deck.length
   const currentCard = hasCard ? deck[cardIndex]! : 'The selected deck is exhausted. Finish the turn or choose another deck next time.'
   const teamAPlayers = Array.isArray(data.teamAPlayers) ? data.teamAPlayers as string[] : players.filter((_, index) => index % 2 === 0).map(player => player.name)
@@ -151,7 +153,7 @@ export function GuessUpGame({ active, players, patchActive, finish, restart, rep
   }, [markCard])
 
   const finishDetails = `${teamAName} ${data.teamA} · ${teamBName} ${data.teamB} · ${data.correct} correct · ${data.pass} passed`
-  const deckItemIds = Array.isArray(data.deckItemIds) ? data.deckItemIds as string[] : []
+  const deckItemIds = teamBDeckActive && Array.isArray(data.deckBItemIds) ? data.deckBItemIds as string[] : (Array.isArray(data.deckItemIds) ? data.deckItemIds as string[] : [])
   const promptId = deckItemIds[cardIndex] ?? null
   const reportsCount = Array.isArray(data.reports) ? data.reports.length : 0
   useGamePhaseFocus(active.phase)
@@ -223,7 +225,7 @@ export function GuessUpGame({ active, players, patchActive, finish, restart, rep
   if (active.phase === 'team-break') return <div className="game-stage guess-stage guess-team-break">
     <span className="eyebrow">{teamAName.toUpperCase()} ROUND COMPLETE</span>
     <h1 className="page-title">Pass the<br /><em>headband.</em></h1>
-    <p className="lead">{teamAName} scored {data.teamA}. Pass the phone to {teamBName} for the same deck and a fresh {durationSeconds}-second turn.</p>
+    <p className="lead">{teamAName} scored {data.teamA}. Pass the phone to {teamBName} for a separate deck and a fresh {durationSeconds}-second turn.</p>
     <div className="guess-team-scores"><div><span>{teamAName.toUpperCase()}</span><strong>{data.teamA}</strong><small>{teamAPlayers.join(' · ')}</small></div><div><span>{teamBName.toUpperCase()}</span><strong>{data.teamB}</strong><small>{teamBPlayers.join(' · ')}</small></div></div>
     {musicControl}
     <button className="primary" onClick={nextTeam}>Get {teamBName} ready <Icon name="arrow-right" size={15} /></button>

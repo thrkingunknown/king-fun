@@ -407,8 +407,8 @@ export default function AppShell({ initialState, initialRevision, initialPersist
     return local
   }, [contentItems, contentPacks, save.adultMode, save.players, save.recent, selectContent])
 
-  const drawGuessUpDeck = (packIds: readonly string[]): ContentItem[] => {
-    const pool = uniqueContentItems(contentItems.filter(item => contentAllowedForMode(item, save.adultMode) && !blockedContentIdsRef.current.has(item.id) && item.gameId === 'guessup' && packIds.includes(item.packId) && (item.kind === 'phrase' || item.kind === 'word')))
+  const drawGuessUpDeck = (packIds: readonly string[], excludeIds: ReadonlySet<string> = new Set()): ContentItem[] => {
+    const pool = uniqueContentItems(contentItems.filter(item => contentAllowedForMode(item, save.adultMode) && !blockedContentIdsRef.current.has(item.id) && !excludeIds.has(item.id) && item.gameId === 'guessup' && packIds.includes(item.packId) && (item.kind === 'phrase' || item.kind === 'word')))
     const eligible = pool.filter(item => !(save.recent[contentQueueKey(item)] ?? []).includes(item.id))
     if (eligible.length === 0) return []
     const deck = secureShuffle(eligible)
@@ -560,7 +560,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
                 : `Generated a fresh word with ${generated.provider === 'cloudflare-workers-ai' ? 'Cloudflare Workers AI' : generated.provider}.`)
               wordPool = generated.items.map(item => ({
                 id: asContentId(`ai:${item.id}`), gameId: 'imposter' as const, kind: 'word' as const, text: item.text,
-                hints: item.hints ?? [], locale: 'en' as const, packId: sourcePack.id, categoryId: String(sourcePack.id),
+                hints: (item.hints ?? []).map(h => h.trim().split(/\s+/).slice(0, 2).join(' ')).filter(Boolean), locale: 'en' as const, packId: sourcePack.id, categoryId: String(sourcePack.id),
                 suitability: save.adultMode ? 'adult' as const : 'general' as const, tags: ['imposter', 'ai'],
                 provenance: { source: 'ai-assisted:gateway' as const, license: 'UserCreated' as const, creator: 'ai' as const, createdAt: Date.now(), reviewedAt: null },
               }))
@@ -628,6 +628,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
       } else if (game === 'guessup') {
         const { createGuessUpRound } = await loadGuessUpRules()
         let selectedDeck = drawGuessUpDeck(config.packIds)
+        let selectedDeckB = drawGuessUpDeck(config.packIds, new Set(selectedDeck.map(item => item.id)))
         if (selectedDeck.length === 0) {
           const sourcePack = gameContentPacks.find(pack => config.packIds.includes(pack.id))
           if (sourcePack) {
@@ -650,7 +651,32 @@ export default function AppShell({ initialState, initialRevision, initialPersist
             }
           }
         }
-        if (selectedDeck.length === 0) { setToast('Every selected GuessUp deck is exhausted under its recent-content window. Select another deck or reset recent history.'); return }
+        if (selectedDeckB.length === 0 && selectedDeck.length > 0) {
+          selectedDeckB = drawGuessUpDeck(config.packIds, new Set(selectedDeck.map(item => item.id)))
+          if (selectedDeckB.length === 0) {
+            const sourcePack = gameContentPacks.find(pack => config.packIds.includes(pack.id))
+            if (sourcePack) {
+              try {
+                const generated = await generateAiContent({
+                  game: 'guessup', itemKind: 'charade', categoryId: String(sourcePack.id),
+                  categoryName: sourcePack.name, categoryDescription: sourcePack.description, count: 12,
+                  suitability: save.adultMode ? 'adult' : 'general', adultMode: save.adultMode,
+                  playerCount: save.players.length, playerNames: save.players.map(player => player.name), recentItems: selectedDeck.map(item => item.text),
+                })
+                selectedDeckB = generated.items.map(item => ({
+                  id: asContentId(`ai:${item.id}`), gameId: 'guessup' as const, kind: 'phrase' as const, text: item.text,
+                  locale: 'en' as const, packId: sourcePack.id, categoryId: String(sourcePack.id),
+                  suitability: save.adultMode ? 'adult' as const : 'general' as const, tags: ['guessup', 'ai'],
+                  provenance: { source: 'ai-assisted:gateway' as const, license: 'UserCreated' as const, creator: 'ai' as const, createdAt: Date.now(), reviewedAt: null },
+                }))
+              } catch (error) {
+                setToast(`GuessUp Team B generation failed: ${error instanceof Error ? error.message : 'Try again shortly.'}`)
+              }
+            }
+          }
+          if (selectedDeckB.length === 0) selectedDeckB = secureShuffle(selectedDeck)
+        }
+        if (selectedDeck.length === 0 || selectedDeckB.length === 0) { setToast('Every selected GuessUp deck is exhausted under its recent-content window. Select another deck or reset recent history.'); return }
         const teamAPlayerIds = save.players.filter(player => config.teamAssignments[player.id] === 'A').map(player => player.id)
         const teamBPlayerIds = save.players.filter(player => config.teamAssignments[player.id] === 'B').map(player => player.id)
         try {

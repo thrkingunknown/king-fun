@@ -40,7 +40,7 @@ describe('Imposter AI word clues', () => {
     expect(validateGeneratedItems({ items: [{ text: 'Penguin', hints }] }, input)[0]?.hints).toHaveLength(20)
     expect(() => validateGeneratedItems({ items: [{ text: 'Penguin', hints: hints.slice(0, 19) }] }, input)).toThrow(SafeProviderError)
     expect(() => validateGeneratedItems({ items: [{ text: 'Penguin', hints: [...hints.slice(0, 19), 'A penguin'] }] }, input)).toThrow(SafeProviderError)
-    expect(() => validateGeneratedItems({ items: [{ text: 'Penguin', hints: [...hints.slice(0, 19), 'A very obvious clue'] }] }, input)).toThrow(SafeProviderError)
+    expect(() => validateGeneratedItems({ items: [{ text: 'Penguin', hints: [...hints.slice(0, 19), 'A very obvious long clue'] }] }, input)).toThrow(SafeProviderError)
   })
 })
 

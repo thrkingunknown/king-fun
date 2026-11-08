@@ -42,9 +42,10 @@ export function ImposterGame({ active, players, patchActive, finish, startGame }
   const canPassPhone = roleViewed && !roleRevealed
   // Fail closed for partially migrated or malformed saves. Never fall through to the word.
   const revealedSecret = currentRole === 'Mystic' ? 'MYSTIC' : currentRole === 'Mr. White' ? 'MR. WHITE' : currentRole === 'Civilian' ? secretWord : 'UNAVAILABLE'
-  const revealedHint = currentRole === 'Mystic' ? (data.hints?.[currentPlayerId ?? ''] ?? null) : null
+  const revealedHintRaw = currentRole === 'Mystic' ? (data.hints?.[currentPlayerId ?? ''] ?? null) : null
+  const revealedHint = revealedHintRaw ? revealedHintRaw.trim().split(/\s+/).slice(0, 2).join(' ') : null
   const revealDescription = currentRole === 'Mystic'
-    ? `You do not know the secret word. ${revealedHint ? `Your hint: ${revealedHint}.` : 'No hint is available.'} Listen carefully and blend in.`
+    ? 'You do not know the secret word. Listen carefully and blend in.'
     : currentRole === 'Mr. White' ? 'You know only the category. Listen carefully and try to infer the secret word.'
     : currentRole === 'Civilian'
       ? 'Keep this word secret. Give clues without making it too obvious.'
@@ -172,7 +173,9 @@ export function ImposterGame({ active, players, patchActive, finish, startGame }
             <div className="role-card-face role-card-front" aria-hidden={!roleRevealed}>
               {roleRevealed && <>
                 <span className="eyebrow">YOUR SECRET IS</span>
-                <span className="eyebrow">CATEGORY · {data.category}</span><span className="role-card-secret">{revealedSecret}</span>
+                <span className="eyebrow role-card-category">CATEGORY · {data.category}</span>
+                <span className="role-card-secret">{revealedSecret}</span>
+                {currentRole === 'Mystic' && revealedHint ? <span className="role-card-hint-badge" aria-label={`Hint: ${revealedHint}`}>HINT · {revealedHint}</span> : null}
                 <span className="role-card-description">{revealDescription}</span>
                 <span className="role-card-footer">RELEASE TO HIDE</span>
               </>}
@@ -183,7 +186,7 @@ export function ImposterGame({ active, players, patchActive, finish, startGame }
           {roleRevealed ? 'Hide role now' : 'Show role · tap to hide'}
         </button>
         <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {roleRevealed ? `Your role is ${revealedSecret}. ${revealDescription}` : 'Your role is hidden.'}
+          {roleRevealed ? `Your role is ${revealedSecret}. ${revealedHint ? `Hint: ${revealedHint}. ` : ''}${revealDescription}` : 'Your role is hidden.'}
         </span>
         <p className={`reveal-handoff-hint${roleViewed ? ' is-ready' : ''}`}>
           {!roleViewed ? 'Hold the card to view your role before passing the phone.' : roleRevealed ? 'Release the card to hide your role before passing the phone.' : 'Role hidden. You can now pass the phone.'}

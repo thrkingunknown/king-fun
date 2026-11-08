@@ -29,7 +29,7 @@ describe('Mystery Who custom word packs', () => {
     expect(() => validateImposterPackEntries([`Map | ${Array.from({ length: 21 }, () => 'clue').join(' | ')}`, 'Atlas | pages'])).toThrow('1–20')
     expect(() => validateImposterPackEntries(['Map | paper', ' map  | Cartography'])).toThrow('duplicate secret words')
     expect(() => validateImposterPackEntries(['Map | Map | Paper', 'Atlas | Pages'])).toThrow('must not reveal')
-    expect(() => validateImposterPackEntries(['Lantern | A lantern is useful', 'Compass | North'])).toThrow('must not reveal')
+    expect(() => validateImposterPackEntries(['Lantern | Lantern glow', 'Compass | North'])).toThrow('must not reveal')
     expect(() => validateImposterPackEntries(['Lantern | Lantern!', 'Compass | North'])).toThrow('must not reveal')
     expect(() => validateImposterPackEntries(['Map | Paper | paper', 'Atlas | Pages'])).toThrow('duplicate hints')
   })

@@ -95,7 +95,7 @@ function promptFor(input: GenerateInput): string {
   const constraints = input.itemKind === 'category'
     ? 'Create category metadata only: each text is a short distinct category name (2–40 characters), each description is a useful one-sentence explanation (10–180 characters), and emoji is one representative emoji. Do not generate words or other game prompts.'
     : input.game === 'imposter' && input.itemKind === 'word'
-      ? 'Each word must have exactly 20 distinct, concise, indirect hints. No hint may contain the answer as a complete token sequence, use a trivial inflection, or directly identify it.'
+      ? 'Each word must have exactly 20 distinct, concise, indirect hints. Every hint must be at most 2 words (1-2 words total), vague rather than a giveaway, and never a complete sentence. No hint may contain the answer as a complete token sequence, use a trivial inflection, or directly identify it.'
       : input.itemKind === 'party-prompt'
         ? `Party prompt constraints: ${partyFormat}`
         : 'Set hints to an empty array for every item.'
