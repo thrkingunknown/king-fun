@@ -1,11 +1,9 @@
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  let mut builder = tauri::Builder::default().plugin(tauri_plugin_http::init());
+  let builder = tauri::Builder::default().plugin(tauri_plugin_http::init());
 
   #[cfg(desktop)]
-  {
-    builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
-  }
+  let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
   builder
     .setup(|app| {

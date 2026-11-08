@@ -54,6 +54,20 @@ jobs:
       - name: Install Android NDK
         run: sdkmanager --install "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0"
 
+      - name: Cache Rust and Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-android-${{ hashFiles('src-tauri/Cargo.lock', 'bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-android-${{ hashFiles('src-tauri/Cargo.lock', 'bun.lock') }}-
+            ${{ runner.os }}-android-
+
       - name: Install workspace dependencies
         run: bun install --frozen-lockfile
 
@@ -64,8 +78,16 @@ jobs:
             bun run tauri android init --ci
           fi
 
-      - name: Build Android bundles
-        run: bun run tauri android build --ci
+      - name: Configure Android compiler warnings
+        shell: bash
+        run: |
+          {
+            echo 'android.javaCompile.suppressSourceTargetDeprecationWarning=true'
+            echo 'android.sync.suppressAGPWarnings=JAVA_COMPILE_DEPRECATED_SOURCE_TARGET'
+          } >> src-tauri/gen/android/gradle.properties
+
+      - name: Build Android arm64 bundles
+        run: bun run tauri android build --ci --target aarch64
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v7.0.2

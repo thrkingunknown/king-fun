@@ -75,6 +75,19 @@ jobs:
           packages: platform-tools
       - name: Install Android SDK/NDK components
         run: sdkmanager --install "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0"
+      - name: Cache Rust and Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-android-release-${{ hashFiles('src-tauri/Cargo.lock', 'bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-android-release-${{ hashFiles('src-tauri/Cargo.lock', 'bun.lock') }}-
+            ${{ runner.os }}-android-release-
       - run: bun install --frozen-lockfile
       - name: Initialize Android project if missing
         shell: bash
@@ -82,6 +95,13 @@ jobs:
           if [ ! -d src-tauri/gen/android ]; then
             bun run tauri android init --ci
           fi
+      - name: Configure Android compiler warnings
+        shell: bash
+        run: |
+          {
+            echo 'android.javaCompile.suppressSourceTargetDeprecationWarning=true'
+            echo 'android.sync.suppressAGPWarnings=JAVA_COMPILE_DEPRECATED_SOURCE_TARGET'
+          } >> src-tauri/gen/android/gradle.properties
       - name: Restore Android signing keystore
         if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
         shell: bash
