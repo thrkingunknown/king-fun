@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { ContentItem, ContentPack } from './domain/shared/contracts.ts'
-import { IMPOSTER_CATEGORY_BANKS } from './content/imposter-categories.ts'
 import { StatusPanel } from './components/ui/StatusPanel.tsx'
 import { Icon } from './components/ui/Icon.tsx'
 import { AmbientBackground } from './components/ui/AmbientBackground.tsx'
@@ -544,59 +543,90 @@ export default function AppShell({ initialState, initialRevision, initialPersist
       let phase = 'playing'
       const recent = { ...save.recent }
       if (game === 'imposter') {
-        const { createImposterRound, normalizeImposterWord, selectImposterWordFromCategories } = await import('./domain/games/imposter.ts')
-        let wordPool = uniqueContentItems(gameContentItems.filter(item => item.gameId === 'imposter' && item.kind === 'word' && config.packIds.includes(item.packId)))
-        if (wordPool.length === 0) {
-          const sourcePack = gameContentPacks.find(pack => config.packIds.includes(pack.id))
-          if (sourcePack) {
-            try {
-              const generated = await generateAiContent({
-                game: 'imposter', itemKind: 'word', categoryId: String(sourcePack.id),
-                categoryName: sourcePack.name, categoryDescription: sourcePack.description, count: 1,
-                suitability: save.adultMode ? 'adult' : 'general', adultMode: save.adultMode,
-                playerCount: save.players.length, playerNames: save.players.map(player => player.name),
-                recentItems: recent['imposter:words'] ?? [],
-              })
-              setToast(generated.provider === 'content-vault'
-                ? 'Loaded a fresh word from the content vault.'
-                : `Generated a fresh word with ${generated.provider === 'cloudflare-workers-ai' ? 'Cloudflare Workers AI' : generated.provider}.`)
-              wordPool = generated.items.map(item => ({
-                id: asContentId(`ai:${item.id}`), gameId: 'imposter' as const, kind: 'word' as const, text: item.text,
-                hints: (item.hints ?? []).map(h => h.trim().split(/\s+/).slice(0, 2).join(' ')).filter(Boolean), locale: 'en' as const, packId: sourcePack.id, categoryId: String(sourcePack.id),
-                suitability: save.adultMode ? 'adult' as const : 'general' as const, tags: ['imposter', 'ai'],
-                provenance: { source: 'ai-assisted:gateway' as const, license: 'UserCreated' as const, creator: 'ai' as const, createdAt: Date.now(), reviewedAt: null },
-              }))
-            } catch (error) {
-              setToast(`Word generation failed: ${error instanceof Error ? error.message : 'Try again shortly.'}`)
-              return
-            }
-          }
-        }
-        const usedWords = recent['imposter:all'] || []
-        const usedWordTexts = recent['imposter:words'] || []
-        const perCategoryRecentIds = wordPool.flatMap(item => recent[contentQueueKey(item)] ?? [])
-        const recentCategoryIds = recent['category:imposter'] ?? []
-        const selectedCategoryIds = [...new Set(wordPool.map(item => item.categoryId))]
-        const categoryWindow = categoryRepeatWindow(selectedCategoryIds.length)
-        const word = selectImposterWordFromCategories(
-          wordPool,
-          [...new Set([...usedWords, ...perCategoryRecentIds])],
-          usedWordTexts,
-          secureRandomInteger,
-          recentCategoryIds,
-          categoryWindow,
-        )
-        if (!word) {
-          setToast('All selected Imposter words are still in the last-10 history. Add another category or explicitly reset recent content history; no words were repeated.')
+        const { createImposterRound, normalizeImposterWord, selectImposterCategory, selectImposterWord } = await import('./domain/games/imposter.ts')
+        const categoryPacks = [...new Map(gameContentPacks
+          .filter(pack => pack.gameId === 'imposter' && config.packIds.includes(pack.id))
+          .map(pack => [String(pack.id), pack] as const)).values()]
+        const selectedCategoryIds = categoryPacks.map(pack => String(pack.id))
+        if (!selectedCategoryIds.length) {
+          setToast('Select at least one Imposter category.')
           return
         }
-        const categoryFallbackHints = IMPOSTER_CATEGORY_BANKS.find(bank => bank.id === word.categoryId)?.hints ?? []
-        // Built-in/local words may not have per-word hints; use category hints as fallback so Mystics always get context.
-        const wordHints = config.imposter?.mysticHintsEnabled !== false
-          ? (Array.isArray(word.hints) && word.hints.length > 0 ? word.hints : categoryFallbackHints)
+
+        const usedWords = recent['imposter:all'] ?? []
+        const usedWordTexts = recent['imposter:words'] ?? []
+        const recentCategoryIds = recent['category:imposter'] ?? []
+        const categoryWindow = categoryRepeatWindow(selectedCategoryIds.length)
+        const selectedCategoryId = selectImposterCategory(selectedCategoryIds, recentCategoryIds, categoryWindow, secureRandomInteger)
+        const sourcePack = categoryPacks.find(pack => pack.id === selectedCategoryId)
+        if (!sourcePack) {
+          setToast('A selected Imposter category is unavailable. Reopen setup and try again.')
+          return
+        }
+
+        // Built-in category metadata always routes through the LLM provider order.
+        // Only explicitly user-authored/imported packs may draw local word entries.
+        const localWordPool = sourcePack.isDefault ? [] : uniqueContentItems(gameContentItems.filter(item =>
+          item.gameId === 'imposter' && item.kind === 'word' && item.packId === sourcePack.id,
+        ))
+        const categoryWordQueueKey = localWordPool[0]
+          ? contentQueueKey(localWordPool[0])
+          : `content:imposter:${sourcePack.id}:word:en:${sourcePack.suitability}`
+        const recentCategoryWordIds = recent[categoryWordQueueKey] ?? []
+        let word = selectImposterWord(
+          localWordPool,
+          [...new Set([...usedWords, ...recentCategoryWordIds])],
+          secureRandomInteger,
+          usedWordTexts,
+        )
+
+        if (!word) {
+          try {
+            const generated = await generateAiContent({
+              game: 'imposter',
+              itemKind: 'word',
+              categoryId: String(sourcePack.id),
+              categoryName: sourcePack.name,
+              categoryDescription: sourcePack.description,
+              count: 5,
+              suitability: sourcePack.suitability,
+              adultMode: sourcePack.suitability === 'adult',
+              recentItems: usedWordTexts,
+            })
+            const generatedWordPool = generated.items.map(item => ({
+              id: asContentId(`ai:${item.id}`),
+              gameId: 'imposter' as const,
+              kind: 'word' as const,
+              text: item.text,
+              hints: (item.hints ?? []).map(hint => hint.trim()).filter(Boolean),
+              locale: 'en' as const,
+              packId: sourcePack.id,
+              categoryId: String(sourcePack.id),
+              suitability: sourcePack.suitability,
+              tags: ['imposter', 'ai'],
+              provenance: { source: 'ai-assisted:gateway' as const, license: 'UserCreated' as const, creator: 'ai' as const, createdAt: Date.now(), reviewedAt: null },
+            }))
+            word = selectImposterWord(
+              generatedWordPool,
+              [...new Set([...usedWords, ...recentCategoryWordIds])],
+              secureRandomInteger,
+              usedWordTexts,
+            )
+            if (!word) throw new Error('The category did not produce an unused secret word. Try again.')
+            setToast(generated.provider === 'content-vault'
+              ? `Loaded fresh ${sourcePack.name} words from the content vault.`
+              : `Generated fresh ${sourcePack.name} words with ${generated.provider === 'cloudflare-workers-ai' ? 'Cloudflare Workers AI' : generated.provider}.`)
+          } catch (error) {
+            setToast(`Word generation failed: ${error instanceof Error ? error.message : 'Try again shortly.'}`)
+            return
+          }
+        }
+
+        const wordHints = config.imposter?.mysticHintsEnabled !== false && Array.isArray(word.hints)
+          ? word.hints
           : []
         const shuffled = secureShuffle(save.players)
-        const categoryLabel = gameContentPacks.find(pack => pack.id === word.packId)?.name ?? word.categoryId.replace(/[-_]+/g, ' ').replace(/\b\w/g, character => character.toUpperCase())
+        const categoryLabel = sourcePack.name
         let round: ReturnType<typeof createImposterRound>
         try {
           const imposterSetup = config.imposter
@@ -622,9 +652,9 @@ export default function AppShell({ initialState, initialRevision, initialPersist
         recent['imposter:words'] = [...usedWordTexts, normalizeImposterWord(word.text)].slice(-10)
         const wordQueueKey = contentQueueKey(word)
         recent[wordQueueKey] = [...(recent[wordQueueKey] ?? []), word.id].filter((id, index, list) => list.indexOf(id) === index).slice(-10)
-        const relevantCategoryHistory = recentCategoryIds.filter(id => selectedCategoryIds.includes(id) && id !== word.categoryId)
+        const relevantCategoryHistory = recentCategoryIds.filter(id => selectedCategoryIds.includes(id) && id !== selectedCategoryId)
         recent['category:imposter'] = categoryWindow > 0
-          ? [...relevantCategoryHistory, word.categoryId].slice(-categoryWindow)
+          ? [...relevantCategoryHistory, selectedCategoryId].slice(-categoryWindow)
           : []
         phase = 'reveal'
         if (!round.votingEnabled) data = { ...data, autoResolveAfterDiscussion: true }

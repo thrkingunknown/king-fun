@@ -157,12 +157,12 @@
   - [ ] Browser refresh/resume, touch, keyboard, screen-reader, and private-handoff acceptance.
   - [!] Troll Mode effects and faction elimination/win/tie rules are not specified by the report; do not invent them.
 - [~] **TASK-IMP-002 — Implement content, custom packs, and repeat protection.**
-  - [x] 30 built-in categories with 60 concrete answers each (1,800 total); canonical duplicate checks pass.
+  - [x] All 30 general built-in categories plus the 18+ After Dark category are preserved as metadata-only packs; no built-in Imposter words or hints are bundled.
   - [x] Uniform category-first selection, adaptive category cooldown, global normalized last-10 word exclusion, per-category recent-item exclusion, and explicit exhaustion/reset.
   - [x] Custom category CRUD and JSON/TXT import/export; 2–100 unique words, 1–20 distinct hints per word, metadata and answer-revealing hint validation; imports are limited to 1 MiB before file reading.
-  - [~] Bundled answers currently use four shared category-safe hints per answer rather than 20 distinct word-specific hints. Curating and human-reviewing 36,000 relevant clues remains open; do not pad with generic or misleading hints.
+  - [x] Built-in categories select first and send the selected title/description through the provider-order API pipeline; each generated word is required to contain 20 distinct answer-safe hints. Manual local packs remain offline-capable.
   - [ ] Browser persistence/exhaustion acceptance.
-- [x] **TASK-IMP-003 — Local persistence and offline behavior.** Preferences, committed role/word/vote state, history, word history, custom packs, and player/category queues use the IndexedDB-backed save and the offline bundled content path. Browser reload/offline acceptance remains open.
+- [x] **TASK-IMP-003 — Local persistence and offline behavior.** Preferences, committed role/word/vote state, history, word history, custom packs, and player/category queues use the IndexedDB-backed save. Manually authored/imported word packs work offline; built-in metadata-only categories require provider/content-vault generation. Browser reload/offline acceptance remains open.
 - [x] **TASK-IMP-004 — Optional AI category metadata generation.** Category suggestions use the secure Elysia/Bun provider gateway; selecting a suggestion, generating word content, and saving it as a named/emoji/description custom category pack are implemented. No browser-side provider key or direct client-to-provider request.
 - [x] **TASK-IMP-005 — Setup/reveal/vote/result UX.** Source implementation includes responsive setup, private role card, accessible reveal alternative, focus/visibility concealment, private ballots, progress, and results. Manual device acceptance remains open.
 
@@ -193,7 +193,7 @@
 - [x] GuessUp tilt sensor listener stays attached across countdown/card ticks, reads the latest score callback through an effect-updated ref, requires neutral re-arming, and can be disabled without losing touch controls.
 - [ ] Browser acceptance at phone/tablet/desktop sizes for focus, motion, screen reader, keyboard/touch, safe areas, no overflow, timer restore, and wheel interruption.
 
-**Phase 4 source status:** All four game flows and all report-defined local Mystery Who mechanics are implemented in source with domain/UI regression coverage. New rounds stage content/recent-queue updates and commit complete active-game snapshots before entering reveal/play; Imposter stores a round-specific roster and uses integer-source Fisher–Yates role/hint shuffling. The user subsequently supplied a Bun 1.4.4 Phase 5 run with both workspace typechecks, 161 tests and the production frontend build passing; the following fixture-only cleanup removes its 16 lint warnings. Phase 6 adds additional release checks and requires its own exact-archive pipeline run. Phase 4 is not a release sign-off until browser/device/privacy/accessibility acceptance is recorded. The 20-word-specific-hints-per-answer curation remains open; Troll Mode and elimination/faction win/tie rules remain blocked because the report does not define them. Phase 5 AI category metadata and generated-pack persistence are implemented in source; provider deployment and release acceptance remain open.
+**Phase 4 source status:** All four game flows and all report-defined local Mystery Who mechanics are implemented in source with domain/UI regression coverage. New rounds stage content/recent-queue updates and commit complete active-game snapshots before entering reveal/play; Imposter stores a round-specific roster and uses integer-source Fisher–Yates role/hint shuffling. The user subsequently supplied a Bun 1.4.4 Phase 5 run with both workspace typechecks, 161 tests and the production frontend build passing; the following fixture-only cleanup removes its 16 lint warnings. Phase 6 adds additional release checks and requires its own exact-archive pipeline run. Phase 4 is not a release sign-off until browser/device/privacy/accessibility acceptance is recorded. The built-in category word/hint pipeline now generates 20 specific hints per word at runtime; provider/network and browser acceptance remain open. Troll Mode and elimination/faction win/tie rules remain blocked because the report does not define them. Phase 5 AI category metadata and generated-pack persistence are implemented in source; provider deployment and release acceptance remain open.
 
 ## Phase 5 — AI providers and public Elysia backend
 
@@ -222,7 +222,7 @@
   - [x] Adaptive player/category windows, separate recent queues by game/category/kind/locale, Imposter global last-10 exclusion, and per-round no-repeat paths are implemented.
   - [x] Send only the relevant recent items and current request constraints; output validation is enforced in application code.
   - [x] Add category metadata generation and authoring UX; validate category names/descriptions/emoji, select a suggestion, generate its word batch, and persist the category metadata and category ID with the local custom pack. Category filtering/recent queues use the persisted category ID.
-  - [ ] Complete the 20 distinct word-specific hints per bundled Imposter answer (36,000 clues) with human semantic review; do not use generic filler.
+  - [x] Remove the 1,800-word bundled Imposter corpus and the bundled hint bank; retain category metadata and generate category-specific words/hints on demand through the provider-order pipeline.
 - [~] **TASK-AI-006 — Deploy and operate the public backend.**
   - [x] Select Vercel Bun Functions as initial deployment target; root project config and deployment runbook are present.
   - [x] Add shared Upstash-compatible Redis REST Lua controls for per-client/minute, global/day, per-provider/day, and global concurrent requests. Client IPs are HMAC-hashed consistently across instances. Production generation fails closed if the shared store is missing/unhealthy; local development uses bounded process-local counters.
@@ -296,10 +296,10 @@ A task is done only when its code is reviewed, linked tests pass, manual verific
 - [x] Fail closed on malformed saved Imposter reveal/vote snapshots and mismatched vote cursor/progress.
 - [x] Prevent GuessUp within-team deck wraparound repeats and reject scores after exhaustion.
 - [x] Display GuessUp card position and a clear exhausted-deck state.
-- [x] Expand offline seed pools for Imposter, GuessUp, Truth or Dare, and I Have Never with stable unique content IDs.
+- [x] Historical Phase 4 task: expanded the original offline seed pools. The Imposter portion was superseded on 2026-11-08 by metadata-only built-in categories and provider-order generation; the other three pools remain locally seeded.
 - [ ] Run Bun typecheck/tests/build and browser-test the complete phase on desktop/touch devices.
 - [x] Archive and implement the supplied local Mystery Who report; its online multiplayer sections are explicitly excluded.
-- [ ] Complete the 20-distinct-word-specific-hints-per-answer curation and semantic review.
+- [ ] Verify category metadata prompt fidelity, generated-word/hint quality, provider order, content-vault reuse, and graceful provider/offline failure across all built-in categories.
 - [ ] Keep Troll Mode, elimination/faction win rules, and undefined tie/no-vote victory transitions blocked until the owner supplies an authoritative specification.
 
 
@@ -319,7 +319,7 @@ Reference flows are documented in `docs/gameplay-reference.md`. Original copy, c
 - [x] Imposter's report-defined local loop is implemented; online mode excluded, and report-undefined rules remain unimplemented.
 - [ ] Browser verification for touch/keyboard/screen reader, reduced motion, safe areas, variable rosters, reload/resume, focus, timer/sensor behavior, and narrow viewport overflow.
 - [x] Historical Phase 4 test snapshots were superseded by the user-confirmed Phase 5 Bun 1.4.4 run (161 tests, both workspace typechecks and frontend build passed). Phase 6 adds more checks and requires a fresh run on the exact Phase 6 archive.
-- [~] Built-in Mystery Who answer bank has 1,800 answers across 30 categories, but only four shared category-safe hints per answer. The 20 distinct word-specific hints/answer and semantic review require content authoring.
+- [x] Built-in Mystery Who categories are metadata-only and generate five words per round through the provider-order pipeline with exactly 20 distinct answer-safe hints each. Manual local packs provide the offline path. Provider/network acceptance remains open.
 - [!] Troll Mode and elimination/faction win/tie rules are not defined in the report; do not infer them.
 - [→ Phase 5] Optional AI content generation requires the approved secure Elysia/Bun provider gateway.
 

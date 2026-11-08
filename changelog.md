@@ -1,3 +1,16 @@
+## 2026-11-08 — Imposter built-in categories now generate through provider order
+
+### Changed
+- Removed the 1,800-word bundled Imposter answer bank and the bundled word/hint entries. Kept all 30 report-named general categories and the 18+ After Dark category as metadata-only packs with their existing stable pack IDs, titles, descriptions, and suitability.
+- Every built-in Imposter round now selects one category first, then passes that category's ID, title, description, and the global recent-word exclusions to the existing `generateAiContent` provider-order pipeline. The request generates five words for that selected category; generated word-specific hints are retained without truncation.
+- Updated setup so empty built-in Imposter category packs remain selectable/startable and are labelled `AI-GENERATED ON PLAY`. Manually authored/imported local word packs remain playable offline.
+- The Settings-side Imposter word generator now resolves built-in category IDs to their stored title/description automatically and requires both fields for custom themes. Built-in categories are explicitly prevented from drawing local seed entries; only manually authored/imported word packs use the local word path.
+- Aligned the Imposter generation prompt with the backend validator: exactly 20 distinct, answer-safe, 1–2-word hints per generated word.
+- Updated seed/domain tests and current project documentation to distinguish the source report's historical 1,800-entry catalogue from KING-FUN's metadata-only runtime generation design.
+
+### Verification
+- Pending exact-revision Bun 1.4.4 lint, typecheck, unit tests, security audit, production build, and browser/device acceptance. See the latest verification entry in `verification.md`.
+
 ## 2026-11-07 — Ambient renderer compiler/typecheck remediation
 
 ### Fixed

@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -239,6 +239,13 @@ record('Adult generation follows configured providers and uses a distinct adultM
 record('All-ages generation explicitly excludes adult sexual vocabulary and server validator enforces it', providerPrompt.includes('exclude sexual content and adult-topic vocabulary') && generationSchema.includes('adultTopicPatterns') && (generationSchema.includes("suitability !== 'adult'") || generationSchema.includes("suitability==='adult'")))
 record('Generated batches require explicit local review and saving before entering local gameplay packs', settings.includes('Save as local custom pack') && settings.includes('reviewed and saved locally') && settings.includes('props.saveGeneratedPack(') && appShell.includes('saveGeneratedPack={async'))
 record('Generation requests pass suitability/adultMode and category theme metadata to the gateway', aiClient.includes('adultMode') && aiClient.includes('categoryName') && (providerPrompt.includes('categoryName') || generationSchema.includes('categoryName')))
+const imposterCategorySource = read('frontend/src/content/imposter-categories.ts')
+const imposterSeedTests = read('frontend/src/content/seed.test.ts')
+record('Built-in Imposter categories retain metadata only and no bundled answer/hint bank', imposterCategorySource.includes('IMPOSTER_CATEGORIES') && !imposterCategorySource.includes('words:') && !imposterCategorySource.includes('hints:') && !existsSync(join(root, 'frontend/src/content/imposter-additional-words.ts')) && imposterSeedTests.includes('toHaveLength(0)'))
+record('Built-in Imposter categories always use ordered generation after category selection; authored word packs stay local', appShell.includes('selectImposterCategory(selectedCategoryIds') && appShell.includes('const localWordPool = sourcePack.isDefault ? []') && appShell.includes('categoryName: sourcePack.name') && appShell.includes('categoryDescription: sourcePack.description') && aiClient.includes('getAiProviderOrder()') && providerPrompt.includes('Selected category/theme'))
+record('Imposter API contract requires category metadata and exactly 20 distinct hints per generated word', generationSchema.includes('Imposter word generation requires the selected category title and description') && providerPrompt.includes('Provide exactly 20 distinct hints per word') && generationSchema.includes('row.hints.length !== 20'))
+record('Empty built-in Imposter category packs remain selectable for deferred API generation', setup.includes("game.id === 'imposter' || !pack.isDefault") && setup.includes('AI-GENERATED ON PLAY'))
+record('Settings Imposter word generation supplies built-in category metadata or requires custom title and description', settings.includes('IMPOSTER_CATEGORIES.find(category => category.id === aiCategory)') && settings.includes('categoryName: aiThemeName') && settings.includes('categoryDescription: aiThemeDescription') && settings.includes('requiresCustomImposterMetadata'))
 record('Prompt-driven generation supports expanded games and party prompts', generationSchema.includes("'party-prompt'") && backendIndex.includes('party-prompt') && (aiClient.includes("'party-prompt'") || aiClient.includes('party-prompt')))
 
 record('Redis content IDs, dedupe keys and pool keys are suitability-separated', generationSchema.includes('input.suitability}|${key}') && vaultSource.includes('input.suitability].join') && vaultSource.includes('input.suitability, canonicalizeGeneratedText'))

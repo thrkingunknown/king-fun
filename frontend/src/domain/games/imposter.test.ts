@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createImposterRound, getImposterVoteProgress, mysticCount, recordImposterVote, recordImposterBallot, resolveImposterVotes, selectImposterWord, skipImposterVote, mrWhiteGuessWins, mrWhiteReachedThreshold, normalizeImposterWord, selectImposterWordFromCategories } from './imposter.ts'
+import { createImposterRound, getImposterVoteProgress, mysticCount, recordImposterVote, recordImposterBallot, resolveImposterVotes, selectImposterWord, skipImposterVote, mrWhiteGuessWins, mrWhiteReachedThreshold, normalizeImposterWord, selectImposterWordFromCategories, selectImposterCategory } from './imposter.ts'
 import type { Player } from '../../types.ts'
 
 const players: Player[] = Array.from({ length: 20 }, (_, index) => ({ id: `p${index + 1}`, name: `Player ${index + 1}` }))
@@ -83,6 +83,21 @@ describe('Imposter word history', () => {
   test('rejects duplicate stable IDs and invalid random indexes', () => {
     expect(() => selectImposterWord([{ id: 'same' }, { id: 'same' }], [], () => 0)).toThrow()
     expect(() => selectImposterWord([{ id: 'one' }], [], () => 1)).toThrow()
+  })
+
+  test('selects a category before word generation and respects category cooldowns', () => {
+    const categories = ['animals', 'fruit', 'cities']
+    expect(selectImposterCategory(categories, ['animals'], 1, () => 0)).toBe('fruit')
+    expect(selectImposterCategory(categories, ['animals', 'fruit', 'cities'], 3, max => max - 1)).toBe('cities')
+    expect(selectImposterCategory(categories, [], 0, max => max - 1)).toBe('cities')
+    expect(selectImposterCategory([], [], 0, () => 0)).toBeNull()
+  })
+
+  test('rejects invalid category IDs, duplicates, cooldowns, and random indexes', () => {
+    expect(() => selectImposterCategory(['animals', 'animals'], [], 0, () => 0)).toThrow()
+    expect(() => selectImposterCategory([''], [], 0, () => 0)).toThrow()
+    expect(() => selectImposterCategory(['animals'], [], -1, () => 0)).toThrow()
+    expect(() => selectImposterCategory(['animals'], [], 0, () => 1)).toThrow()
   })
 })
 

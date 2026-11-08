@@ -172,7 +172,7 @@ export function SetupScreen({ game, adultMode, players, packs, contentItems, sav
         : game.id === 'never-have-i-ever'
           ? selectedItems.some(item => item.kind === 'never-have-i-ever')
           : selectedItems.some(item => item.kind === 'party-prompt'))
-  const hasDeferredApiCategory = selectedPacks.some(pack => !pack.isDefault && contentCount(pack) === 0)
+  const hasDeferredApiCategory = selectedPacks.some(pack => contentCount(pack) === 0 && (game.id === 'imposter' || !pack.isDefault))
   const teamNamesValid = teamAName.trim().length > 0 && teamBName.trim().length > 0 && teamAName.trim().toLocaleLowerCase() !== teamBName.trim().toLocaleLowerCase()
   const canStart = enoughPlayers && allSelectedPacksExist && (hasGameContent || hasDeferredApiCategory) && (game.id !== 'guessup' || (balancedTeams && teamNamesValid))
 
@@ -391,7 +391,7 @@ export function SetupScreen({ game, adultMode, players, packs, contentItems, sav
               const existing = current.filter(id => availablePacks.some(packItem => packItem.id === id))
               return selected ? existing.filter(id => id !== pack.id) : [...new Set([...existing, pack.id])]
             })}>
-              <span className="pack-select-mark">{selected ? <Icon name="check" size={15} /> : <Icon name="plus" size={15} />}</span><span className="pack-main"><strong><Icon name="dice" size={15} /> {pack.name}</strong><span className="pack-meta">{count} prompts · {pack.suitability === 'general' ? 'ALL AGES' : pack.suitability.toUpperCase()}</span></span>
+              <span className="pack-select-mark">{selected ? <Icon name="check" size={15} /> : <Icon name="plus" size={15} />}</span><span className="pack-main"><strong><Icon name="dice" size={15} /> {pack.name}</strong><span className="pack-meta">{count > 0 ? `${count} prompts` : game.id === 'imposter' || !pack.isDefault ? 'AI-GENERATED ON PLAY' : 'NO CONTENT'} · {pack.suitability === 'general' ? 'ALL AGES' : pack.suitability.toUpperCase()}</span></span>
             </button>
             {!pack.isDefault && <div className="pack-manage"><button type="button" onClick={() => openEditPack(pack)}>Edit</button><button type="button" onClick={() => deleteCustomPack(String(pack.id))}>Delete</button></div>}
           </article>
@@ -431,7 +431,7 @@ export function SetupScreen({ game, adultMode, players, packs, contentItems, sav
       <div className="setup-aside-summary"><span>{players.length} players</span><span>{RULE_ONLY_GAMES.has(game.id) ? 'Built-in rules' : `${validSelectedPackIds.length} ${validSelectedPackIds.length === 1 ? 'pack' : 'packs'}`}</span>{game.id === 'guessup' && <span>{guessUpPreferences.durationSeconds}s turns</span>}{isPlayerModeGame && <span>{MODES.find(item => item.id === mode)?.title}</span>}</div>
       <button type="button" className="primary dark-primary" disabled={!canStart} onClick={submitSetup}>Start game <Icon name="arrow-up-right" size={17} /></button>
     </aside></div>
-    <div className="setup-mobile-action"><button className="primary" disabled={!canStart} onClick={submitSetup}>Start game <Icon name="arrow-up-right" size={17} /></button><small>{!enoughPlayers ? `Use ${minimumPlayersForGame(game.id)}–${maximumPlayersForGame(game.id)} players`  : !allSelectedPacksExist || !hasGameContent ? 'Select packs with playable content' : game.id === 'guessup' && !balancedTeams ? 'Assign players to both teams' : game.id === 'guessup' && !teamNamesValid ? 'Use two different team names' : 'Ready to start'}</small></div>
+    <div className="setup-mobile-action"><button className="primary" disabled={!canStart} onClick={submitSetup}>Start game <Icon name="arrow-up-right" size={17} /></button><small>{!enoughPlayers ? `Use ${minimumPlayersForGame(game.id)}–${maximumPlayersForGame(game.id)} players`  : !allSelectedPacksExist || (!hasGameContent && !hasDeferredApiCategory) ? 'Select a category or pack with playable content' : game.id === 'guessup' && !balancedTeams ? 'Assign players to both teams' : game.id === 'guessup' && !teamNamesValid ? 'Use two different team names' : 'Ready to start'}</small></div>
 
     <dialog ref={packDialogRef} className="custom-pack-editor" aria-labelledby="custom-pack-title" onCancel={event => { event.preventDefault(); setPackEditorOpen(false) }} onClick={event => { if (event.target === event.currentTarget) setPackEditorOpen(false) }}>
 

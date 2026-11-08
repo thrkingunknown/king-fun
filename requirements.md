@@ -6,7 +6,7 @@
 
 ## 1. Product scope
 
-Deliver a polished, original, mobile-first web portal containing Imposter, GuessUp, Truth or Dare, and I Have Never. The portal MUST support modern mobile and desktop browsers, local pass-and-play, offline core gameplay, resumable sessions, and optional AI-assisted content generation. The project is free/open-source: no advertisements, paid tiers, premium locks, or mandatory accounts. There is no conventional DBMS or server-side game-history store.
+Deliver a polished, original, mobile-first web portal containing Imposter, GuessUp, Truth or Dare, and I Have Never. The portal MUST support modern mobile and desktop browsers, local pass-and-play, resumable sessions, and offline core gameplay. AI-assisted generation is optional overall; the built-in metadata-only Imposter categories are the explicit exception and require the provider pipeline, while manually authored/imported Imposter word packs remain offline-capable. The project is free/open-source: no advertisements, paid tiers, premium locks, or mandatory accounts. There is no conventional DBMS or server-side game-history store.
 
 The games are inspired by broad mechanics in public references, not copied assets, source code, branding, screen designs, wording, or content banks.
 
@@ -24,7 +24,7 @@ The games are inspired by broad mechanics in public references, not copied asset
 
 ### 2.2 Imposter — Mystery Who local rules
 
-The complete user-supplied Mystery Who report is the local gameplay source of truth; online multiplayer is excluded. Detailed rules and known gaps are in [Section 4](#4-mystery-who-local-gameplay-reference). The full report is archived verbatim in [`docs/references/mystery-who-full-report.md`](docs/references/mystery-who-full-report.md), and its local-only extraction is maintained in [`docs/mystery-who-local-reference.md`](docs/mystery-who-local-reference.md). The built-in bank currently has four shared category-safe hints per answer; the full 20-distinct-word-specific-hint catalogue remains a content-authoring requirement, not a completed feature.
+The complete user-supplied Mystery Who report is the local gameplay source of truth; online multiplayer is excluded. Detailed rules and known gaps are in [Section 4](#4-mystery-who-local-gameplay-reference). The full report is archived verbatim in [`docs/references/mystery-who-full-report.md`](docs/references/mystery-who-full-report.md), and its local-only extraction is maintained in [`docs/mystery-who-local-reference.md`](docs/mystery-who-local-reference.md). Built-in Imposter categories are metadata-only. Their title and description are passed to the AI provider-order pipeline at round start; no static Imposter answer or hint bank is bundled. Locally authored/imported custom word packs remain available offline.
 
 | ID | Requirement | Acceptance criteria |
 |---|---|---|
@@ -39,10 +39,10 @@ The complete user-supplied Mystery Who report is the local gameplay source of tr
 | FR-IMP-009 | Support sequential multi-target voting. | Exactly ordinary Mystic count; self-vote and skip allowed; duplicates/invalid targets rejected. |
 | FR-IMP-010 | Implement Mr. White final guess. | Threshold evaluated after all ballots; normalized exact comparison. |
 | FR-IMP-011 | Present round results and voter visibility. | Word/category/roles/tally/hints/guess outcome; hidden-voter mode hides voter identities. |
-| FR-IMP-012 | Support 30 built-in categories and combined category selection. | Category is selected uniformly before a word is selected from it. |
+| FR-IMP-012 | Support all 30 report-named built-in categories plus the existing 18+ category, with combined category selection. | Select one category uniformly before generation; pass its title and description to `generateAiContent` through the configured provider-order pipeline; generate five words with exactly 20 distinct, answer-safe hints each. No built-in Imposter word/hint entries are bundled. |
 | FR-IMP-013 | Support local custom packs/categories. | Name, emoji, description, word + 1–20 hints, JSON/TXT import/export, CRUD; reject files larger than 1 MiB before reading/parsing. |
 | FR-IMP-014 | Enforce global rolling last-10 word exclusion. | Compare stable IDs and normalized text; never silently repeat. |
-| FR-IMP-015 | Preserve local preferences, round state, and offline play. | Theme/settings/session/history restore locally. |
+| FR-IMP-015 | Preserve local preferences, round state, and offline play. | Theme/settings/session/history restore locally; manually authored/imported Imposter packs remain playable offline. Built-in metadata-only categories require an internet connection and an available provider/content-vault result when starting a round. |
 | FR-IMP-016 | Optional AI content generation. | Elysia/Bun gateway, provider adapters, session-only BYOK UI, and local fallback are present in source; deployment and full verification remain open. |
 | FR-IMP-017 | Do not invent undefined Mystery Who rules. | Troll Mode effects and elimination/win/tie transitions remain open until documented. |
 
@@ -92,7 +92,7 @@ The complete user-supplied Mystery Who report is the local gameplay source of tr
 
 | ID | Requirement | Acceptance criteria |
 |---|---|---|
-| FR-AI-001 | AI generation MUST be optional; curated local content remains available without AI. | Each game starts and completes offline using available curated content. |
+| FR-AI-001 | AI generation MUST remain optional for the app overall; built-in Imposter categories are the explicit exception and always generate through the provider-order pipeline. | All other offline-capable content remains usable without AI; Imposter can be played offline with locally authored/imported word packs, while metadata-only built-in/API categories require connectivity and provider availability. |
 | FR-AI-002 | Provider calls MUST pass through provider adapters behind a provider-neutral contract. | Game/domain modules import no provider SDK or vendor endpoint. |
 | FR-AI-003 | The Settings screen MUST provide a drag-reorderable provider list with Gemini, Groq, and Cloudflare Workers AI in that default order. | Gemini and Groq can be reordered; Cloudflare is visibly pinned at the final position. |
 | FR-AI-004 | Gemini and Groq MUST be disabled by default and require a user-entered API key before their toggle is enabled. | No-key switch is greyed out/disabled; settings icon opens a key dialog; saving a key unlocks but does not auto-enable the provider. |
@@ -216,7 +216,7 @@ Do not implement online rooms/lobbies, host migration, network synchronization, 
 
 ### Content-volume gap
 
-The report names 30 categories, reports 60 words per category (1,800 total), and 20 hints per entry. Current King-Fun source contains 1,800 curated answers (60/category) and four shared category-safe hints per answer. The 20 distinct, word-specific hints per entry remain an explicit content-quality gap. Review both answer suitability and clue-to-answer relevance; count/duplicate audits alone are insufficient. Never pad the catalogue with generic filler.
+The archived report's static audit describes 30 categories, 60 words per category (1,800 total), and 20 hints per entry; that is reference-source evidence, not a requirement to ship a static word bank. KING-FUN retains all 30 general category definitions plus its 18+ After Dark category as metadata-only packs. At round start, category selection happens first and the selected title/description are passed through the configured provider-order pipeline to generate five words, each with exactly 20 distinct 1–2-word hints. The server validates hint count, uniqueness and answer safety. No built-in Imposter answer or hint entries are shipped. Manual local packs remain available as the offline alternative.
 
 
 ## 5. AI provider routing, backend, and queue specification
@@ -317,7 +317,7 @@ The AI settings UX, session-memory BYOK with an explicit consent acknowledgement
 
 Backend source enforces 12 KB streamed request and 128 KB streamed upstream-response limits, fixed provider HTTPS endpoints, bounded timeouts, safe errors, exact CORS/HTTPS checks, validated provider/task boundaries, a global kill switch, and a Redis-compatible REST limiter using atomic Lua for per-client minute, global/provider daily request caps, and global concurrency. Imposter category metadata can be generated with a dedicated strict schema, reviewed in Settings, selected as a category, and persisted with its generated word pack. Production fails closed when the shared limiter is absent or unhealthy. Request-count budgets are not monetary spend caps; provider-side billing/usage controls are required.
 
-**Release status: incomplete.** The user verified with Bun 1.4.4 that both normal and frozen root installs succeed. The only lockfile discrepancy was the stale root `name` field retained by Bun after a root rename (Bun issue #47656); the corrected archive sets it to `king-fun` without changing dependency versions, and all root/frontend/backend dependency snapshots match their manifests. The user subsequently ran the full check: frozen install and repository policy passed, lint completed with non-fatal warnings, and frontend typecheck exposed optional-signal and category-kind narrowing errors. This follow-up source fixes those errors and the lint warnings; the native full pipeline must be rerun on this exact archive. Vercel deployment, operator secrets, provider billing/usage settings, external abuse tests, live provider tests, and browser/device acceptance remain unverified. Phase 4's 20-specific-hints-per-bundled-answer content curation is also still open. See `todo.md`, `checklist.md`, and `verification.md`.
+**Release status: incomplete.** The user verified with Bun 1.4.4 that both normal and frozen root installs succeed. The only lockfile discrepancy was the stale root `name` field retained by Bun after a root rename (Bun issue #47656); the corrected archive sets it to `king-fun` without changing dependency versions, and all root/frontend/backend dependency snapshots match their manifests. The user subsequently ran the full check: frozen install and repository policy passed, lint completed with non-fatal warnings, and frontend typecheck exposed optional-signal and category-kind narrowing errors. This follow-up source fixes those errors and the lint warnings; the native full pipeline must be rerun on this exact archive. Vercel deployment, operator secrets, provider billing/usage settings, external abuse tests, live provider tests, and browser/device acceptance remain unverified. The current metadata-only Imposter category pipeline and provider-generated 20-hint contract still require exact-revision verification. See `todo.md`, `checklist.md`, and `verification.md`.
 
 ### DEC-017 — Reusable UI, themes, iconography, and motion
 

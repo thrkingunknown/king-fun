@@ -1,3 +1,9 @@
+# Follow-up correction — 2026-11-08
+
+The 2026-11-07 audit below records the repository state at that date. The current follow-up removes all bundled Imposter word/hint entries, retaining the 30 general category definitions plus the 18+ After Dark category as metadata-only packs. Built-in category selection now passes title/description through the configured provider-order word-generation path; five words with 20 validated hints each are requested. Manual custom/imported word packs remain the offline path. See the 2026-11-08 entry in `verification.md` for the exact changes and verification limits.
+
+---
+
 # KING-FUN implementation and gameplay audit
 
 **Review date:** 2026-11-07  

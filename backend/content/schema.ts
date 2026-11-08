@@ -46,6 +46,7 @@ export function validateGenerateInput(value: unknown): GenerateInput {
   if (typeof v.categoryId !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,63}$/i.test(v.categoryId)) invalid('Invalid category.')
   if (v.categoryName !== undefined && (typeof v.categoryName !== 'string' || v.categoryName.length > 120 || hasControlCharacters(v.categoryName))) invalid('Invalid category name.')
   if (v.categoryDescription !== undefined && (typeof v.categoryDescription !== 'string' || v.categoryDescription.length > 280 || hasControlCharacters(v.categoryDescription))) invalid('Invalid category description.')
+  if (v.game === 'imposter' && v.itemKind === 'word' && (typeof v.categoryName !== 'string' || !v.categoryName.trim() || typeof v.categoryDescription !== 'string' || !v.categoryDescription.trim())) invalid('Imposter word generation requires the selected category title and description.')
   if (typeof v.locale !== 'string' || !/^[a-z]{2}(?:-[A-Z]{2})?$/.test(v.locale)) invalid('Unsupported locale format.')
   if (!['general', 'teen', 'adult'].includes(String(v.suitability))) invalid('Invalid suitability.')
   if (v.adultMode !== undefined && typeof v.adultMode !== 'boolean') invalid('Invalid adult-mode declaration.')

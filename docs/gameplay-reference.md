@@ -56,7 +56,7 @@ The complete user-supplied 977-line Mystery Who report is archived verbatim at [
 
 ### Explicitly open
 
-The report does not define Troll Mode effects, civilian/mystic elimination and win rules, or full tie/no-vote victory transitions. Do not invent these. Current source content has 1,800 answers across 30 categories (60/category), meeting the reported answer count. Each answer currently has four shared category-safe hints, not 20 word-specific hints; further clue authoring requires semantic review rather than generic filler.
+The report does not define Troll Mode effects, civilian/mystic elimination and win rules, or full tie/no-vote victory transitions. Do not invent these. KING-FUN retains all 30 general report-named categories plus its 18+ After Dark category as metadata-only packs. No built-in Imposter words or hints are bundled. A selected category's title and description are passed to the provider-order API pipeline to generate five words with exactly 20 distinct answer-safe hints per word. Manually authored/imported local packs remain playable offline.
 
 
 ## 4. Truth or Dare target flow

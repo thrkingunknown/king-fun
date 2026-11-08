@@ -25,7 +25,7 @@
 
 The user has confirmed that the Phase 5 corrected workspace builds and runs successfully on Bun 1.4.4. The latest user-supplied full check before the final fixture-only lint cleanup reported repository policy pass, frontend lint with zero warnings/errors, both workspace typechecks pass, 161 tests pass, and the frontend production build pass. The final archive removes the 16 unnecessary test-fixture escapes reported in that run. Phase 6 adds source-level release contracts, gzip/build-output checks, a native Bun advisory-audit gate, security response-header assertions, and a manual WCAG/performance/security/recovery rehearsal plan. Re-run `bun run check` on the exact Phase 6 archive; Phase 6 remains open until manual browser/device, advisory/license, hosted-provider and recovery evidence is recorded in `verification.md`.
 
-The project contains four local game flows, IndexedDB/PWA infrastructure, and the Elysia gateway in the root `backend/` workspace. Do not conflate source/test completion with release sign-off. The built-in Mystery Who catalogue currently has four shared category-safe hints per answer rather than 20 distinct word-specific hints; that content-authoring requirement remains open. Troll Mode and elimination/faction win/tie mechanics remain intentionally unimplemented because the supplied report does not define them. See `todo.md` and `verification.md` for current evidence and remaining gates.
+The project contains four local game flows, IndexedDB/PWA infrastructure, and the Elysia gateway in the root `backend/` workspace. Do not conflate source/test completion with release sign-off. Built-in Mystery Who categories are metadata-only; their title and description are sent through provider-order generation and each generated word must have 20 distinct hints. Manually authored/imported packs remain the offline path. Troll Mode and elimination/faction win/tie mechanics remain intentionally unimplemented because the supplied report does not define them. See `todo.md` and `verification.md` for current evidence and remaining gates.
 
 **Imposter scope:** Use the archived Mystery Who report as the local gameplay reference; ignore online mode. Its report-defined modes, role boundaries, hint behavior, timer, ballots, Mr. White threshold/guess, categories, packs, and word-history rules are represented in source. Do not invent Troll Mode or elimination/win/tie resolution rules that the report does not define.
 
@@ -53,7 +53,7 @@ The latest user-machine baseline had all 188 unit/contracts, semantic typechecks
 
 - [x] Imposter role/word assignment is atomic, valid, and persisted before private reveal. (`FR-IMP-002`)
 - [x] Imposter pass-and-play masking prevents accidental disclosure, including blur/visibility concealment and an accessible reveal control. (`FR-IMP-003`)
-- [x] Imposter is classic/offline only and supports 3–20 players. (`FR-IMP-001`)
+- [x] Imposter is local pass-and-play only (no online multiplayer) and supports 3–20 players. (`FR-IMP-001`)
 - [x] Mystic count follows 3–5:1, 6–10:2, 11–15:3, 16–20:4 bands; mode-specific assignment preserves at least one Civilian. (`FR-IMP-005`)
 - [x] Mystic hints, discussion-only timer, voting, Mr. White guess and results are implemented from the supplied report. (`FR-IMP-006` through `FR-IMP-011`)
 - [x] Sequential ballots support exact Mystic-count selections, Skip Vote and self-voting. (`FR-IMP-009`)
@@ -61,7 +61,7 @@ The latest user-machine baseline had all 188 unit/contracts, semantic typechecks
 - [x] 30 category packs, multi-category selection, custom word/hint packs and JSON/TXT import/export are implemented. (`FR-IMP-012`, `FR-IMP-013`)
 - [x] Last 10 normalized word values and stable IDs are excluded across categories; exhaustion is explicit. (`FR-IMP-014`)
 - [x] Dark mode and Imposter setup preferences persist in the local save; round state and word history are included in the active snapshot/save. (`FR-IMP-015`)
-- [x] Classic Imposter gameplay works with bundled/custom offline content; optional AI uses the Phase 5 gateway and is not required to play. (`FR-IMP-015`, `FR-IMP-016`)
+- [x] Classic Imposter works with manually authored/imported local packs offline; built-in metadata-only categories generate words via the configured provider-order gateway. (`FR-IMP-015`, `FR-IMP-016`)
 - [x] Classic excludes Mr. White; Mystics includes exactly one; Chaos uses the documented randomized chance. (`FR-IMP-004`)
 - [x] No online-only feature is required for local Imposter play.
 - [x] GuessUp works with Correct/Pass buttons without device sensors. (`FR-GUESS-003`)
@@ -78,8 +78,8 @@ The latest user-machine baseline had all 188 unit/contracts, semantic typechecks
 - [x] Read and use the complete supplied local gameplay report; online mode excluded.
 - [x] Classic / Mystics / Chaos modes and Civilian / Mystic / Mr. White role boundaries.
 - [x] Banded Mystic counts, immediate press/key-down reveal with conceal-on-release, hints, discussion-only timer, sequential ballots, self-vote, skip, Mr. White threshold/guess, and results.
-- [x] 30 built-in category packs, multi-category selection, 1,800 curated unique answers (60/category), custom word/hint packs, JSON/TXT import/export, and normalized global last-10 plus per-category exclusions.
-- [~] Built-in bank currently has four shared category-safe hints per answer; 20 distinct word-specific hints per built-in answer and full human semantic review remain content work.
+- [x] 30 general built-in category packs plus the 18+ After Dark pack, all metadata-only; category-first provider-order generation, custom word/hint packs, JSON/TXT import/export, and normalized global last-10 plus per-category exclusions.
+- [x] No hardcoded built-in Imposter word or hint entries are shipped; generation schema requires exactly 20 distinct answer-safe hints per generated word.
 - [!] Troll Mode effects and elimination/win rules are not described in the report; do not invent them.
 - [x] Historical Phase 4 source snapshot had a 111-test compatibility check; this was superseded by the user-confirmed 161-test Bun run on the pre-Phase-6 Phase 5 archive. Phase 6 adds further scripts/tests and requires a fresh root `bun run check` on the exact Phase 6 archive.
 
@@ -462,7 +462,7 @@ The latest user-machine baseline had all 188 unit/contracts, semantic typechecks
 
 - [x] Remove React Compiler immutability warning from ambient-scene cleanup without suppressing lint.
 - [x] Scope canonical duplicate checks to each game's own content selection pool.
-- [x] Update bundled pack coverage assertion to match all 27 registered games and retain all 30 Imposter packs.
+- [x] Update bundled pack coverage assertion to match all 27 registered games and retain all 30 general Imposter category packs plus the 18+ pack.
 - [x] Synchronize Playwright setup transition and loaded player roster before the first player-count snapshot.
 - [x] Add Node release-contract and Bun regression coverage for all identified failures.
 - [ ] Rerun `bun run check` on Bun 1.4.4 and confirm zero lint warnings, all unit tests passing, security audit passing, and production build budgets passing.

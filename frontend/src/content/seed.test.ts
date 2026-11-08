@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { SEEDED_CONTENT, SEEDED_PACKS } from './seed.ts'
-import { IMPOSTER_CATEGORY_BANKS } from './imposter-categories.ts'
+import { IMPOSTER_CATEGORIES } from './imposter-categories.ts'
 import { canonicalizeContentText } from '../domain/content/canonicalize.ts'
 
 describe('bundled offline game content', () => {
@@ -14,38 +14,26 @@ describe('bundled offline game content', () => {
     }
   })
 
-  test('ships all 30 Mystery Who category banks with category-specific words', () => {
+  test('keeps all built-in Mystery Who categories as metadata-only AI categories', () => {
     const imposterPacks = SEEDED_PACKS.filter(pack => pack.gameId === 'imposter')
-    const categoryPacks = imposterPacks.filter(pack => pack.suitability !== 'adult')
-    expect(categoryPacks).toHaveLength(IMPOSTER_CATEGORY_BANKS.length)
-    expect(IMPOSTER_CATEGORY_BANKS).toHaveLength(30)
-    for (const pack of categoryPacks) {
-      const entries = SEEDED_CONTENT.filter(item => item.packId === pack.id)
-      expect(entries).toHaveLength(60)
-      expect(entries.every(item => item.kind === 'word')).toBe(true)
+    expect(IMPOSTER_CATEGORIES).toHaveLength(31)
+    expect(imposterPacks).toHaveLength(IMPOSTER_CATEGORIES.length)
+    for (const category of IMPOSTER_CATEGORIES) {
+      const pack = imposterPacks.find(item => item.id === `pack-imposter-${category.id}-v1`)
+      expect(pack).toBeDefined()
+      expect(pack?.name).toBe(category.name)
+      expect(pack?.description).toBe(category.description)
+      expect(pack?.isDefault).toBe(true)
+      expect(pack?.contentIds).toEqual([])
     }
-    const categoryIds = new Set(categoryPacks.map(pack => pack.id))
-    const words = SEEDED_CONTENT.filter(item => item.gameId === 'imposter' && categoryIds.has(item.packId)).map(item => canonicalizeContentText(item.text))
-    expect(words).toHaveLength(IMPOSTER_CATEGORY_BANKS.length * 60)
-    expect(new Set(words).size).toBe(words.length)
-  })
-
-  test('built-in Mystic hints do not contain their secret answer', () => {
-    const words = SEEDED_CONTENT.filter(item => item.gameId === 'imposter')
-    const tokens = (value: string) => value.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
-    for (const item of words) {
-      const answer = tokens(item.text)
-      for (const hint of item.hints ?? []) {
-        const clue = tokens(hint)
-        const leaksAnswer = clue.some((_, start) => answer.every((token, offset) => clue[start + offset] === token))
-        expect(leaksAnswer).toBe(false)
-      }
-    }
+    expect(imposterPacks.filter(pack => pack.suitability === 'adult')).toHaveLength(1)
+    expect(imposterPacks.filter(pack => pack.suitability !== 'adult')).toHaveLength(30)
+    expect(SEEDED_CONTENT.filter(item => item.gameId === 'imposter')).toHaveLength(0)
   })
 
   test('ships a useful baseline pool for all four games', () => {
     const count = (gameId: string, kind?: string) => SEEDED_CONTENT.filter(item => item.gameId === gameId && (!kind || item.kind === kind)).length
-    expect(count('imposter', 'word')).toBeGreaterThanOrEqual(IMPOSTER_CATEGORY_BANKS.length * 60)
+    expect(count('imposter', 'word')).toBe(0)
     expect(count('guessup', 'phrase')).toBeGreaterThanOrEqual(40)
     expect(count('truth-or-dare', 'truth')).toBeGreaterThanOrEqual(10)
     expect(count('truth-or-dare', 'dare')).toBeGreaterThanOrEqual(10)

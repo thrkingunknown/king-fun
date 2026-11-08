@@ -2,13 +2,13 @@
 
 **Reviewed/specification date:** 2026-11-05  
 **Status:** Provider routing, Elysia gateway, settings UX, root `backend/` workspace, bounded streaming readers, shared Redis-compatible atomic limits, and fail-closed production policy are implemented in source. The user confirmed the Bun 1.4.4 Phase 5 screenshot-fix run passed both workspace typechecks, 161 tests and the frontend build; a following fixture-only cleanup removes its 16 Oxlint warnings. Phase 6 adds the release-contract, security-audit, and production artifact-budget gates, which require a fresh full root check on the exact Phase 6 archive. Provider credentials, external billing controls, deployment, and browser/device acceptance remain open. This is not a production-ready deployment.  
-**Scope:** Optional content generation for Imposter, GuessUp, Truth or Dare, and I Have Never. Core games must work without API access.
+**Scope:** Optional content generation for GuessUp, Truth or Dare, and I Have Never, plus the required generation path for built-in Imposter categories. Manual/local Imposter packs remain offline-capable.
 
 ## Imposter generation requirements from the Mystery Who report
 
-The archived Mystery Who report (`references/mystery-who-full-report.md`) describes three content sources for a round: bundled local word banks, manual custom packs, and optional AI-generated content. It also describes AI-defined categories with a category name, emoji, generation instructions, and source type; a new round may ask the model for a fresh secret word and hints. This feature is optional and must never become a prerequisite for starting or completing a local round.
+The archived Mystery Who report (`references/mystery-who-full-report.md`) describes bundled word banks, manual custom packs, and AI-generated content. KING-FUN deliberately replaces the bundled built-in word banks with metadata-only category packs. Every built-in category round selects one category first, passes its title and description to the normal provider-order API pipeline, and requests fresh category-specific words and hints. This generation is required for built-in categories; manually authored/imported local packs remain the offline alternative.
 
-For King-Fun, AI-generated Imposter content MUST use the same provider-neutral Elysia + Bun gateway and fallback chain defined in this document. Validate the generated category/word/hint structure, reject duplicate or answer-revealing hints, apply the global report-required last-10 word exclusion, and keep the round playable with bundled/manual local content whenever a request fails or the device is offline. Do not copy the report's historical Gemini/Groq model IDs or its direct-key assumption into production configuration; model IDs, endpoints, and auth mechanics require a fresh provider review.
+For KING-FUN, every built-in Imposter category MUST use the same provider-neutral Elysia + Bun gateway and configured provider order. The selected category's stable ID, title, description, suitability and relevant recent-word exclusions are sent with the request; player names and private round information are not. The backend validates category-specific words and exactly 20 distinct answer-safe hints per word. Provider failure/offline must produce a clear start error—never substitute content from another category. Manually authored/imported local word packs remain playable offline. Do not copy the report's historical Gemini/Groq model IDs or its direct-key assumption into production configuration; model IDs, endpoints, and auth mechanics require a fresh provider review.
 
 ## 1. Provider list and settings UI
 
@@ -54,7 +54,7 @@ For each generation request:
 3. Show a brief snackbar naming the provider and safe reason, for example: `Gemini rate limit (429) — trying Groq.` Do not show raw provider response bodies, request prompts, keys, or stack traces.
 4. Skip a provider during its cooldown after repeated transient failures. Invalid/revoked credentials (401/403) should mark that provider `Needs attention` and skip it until the key is replaced or the next explicit test succeeds.
 5. Never loop indefinitely. Each provider is attempted at most once per generation request; retry policy is bounded and cancellation stops the chain.
-6. If every remote provider fails, use a non-repeating local curated item when available and show `AI unavailable — using local pack` with the final safe reason. If no eligible content remains, show a proper exhausted state and offer category/pack change; never repeat silently.
+6. If every remote provider fails, use a non-repeating local curated item when one exists and show `AI unavailable — using local pack` with the final safe reason. For metadata-only built-in Imposter categories there is deliberately no bundled fallback: show a clear generation error and let the user retry or select a locally authored/imported word pack. Never substitute another category's words or repeat silently.
 
 The snackbar is feedback for the user, not a log sink. It must not include the user's key, full prompt, player names, or private game state.
 

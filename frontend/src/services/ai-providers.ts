@@ -131,6 +131,9 @@ function localCuratedFallback(input: { game: AiGame; itemKind: AiItemKind; categ
     && !recent.has(item.text.normalize('NFKC').trim().toLocaleLowerCase(locale)),
   )
   const selected = secureShuffle(matching.length ? matching : sameGameFallback).slice(0, Math.min(5, Math.max(1, input.count ?? 5)))
+  if (!selected.length && input.game === 'imposter' && input.itemKind === 'word') {
+    throw new Error(`${reason} Built-in and API-created Imposter categories require the provider pipeline; no bundled word bank is used. Reconnect or restore provider availability, or select a locally authored/imported word pack.`)
+  }
   if (!selected.length) throw new Error(`${reason} Content generation is unavailable right now. Retry when the API is reachable.`)
   return {
     provider: 'local-curated' as const,
@@ -143,9 +146,9 @@ export type AiContentRequest = {
   game: AiGame
   itemKind: AiItemKind
   categoryId: string
-  /** For API-only custom categories/packs: user-provided title (inert data). */
+  /** Selected category title (built-in or API-created; inert data). */
   categoryName?: string
-  /** For API-only custom categories/packs: user-provided short description (inert data). */
+  /** Selected category description (built-in or API-created; inert data). */
   categoryDescription?: string
   count?: number
   recentItems?: string[]

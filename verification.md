@@ -1256,3 +1256,27 @@ From the project root with Bun 1.4.4, run `bun install --frozen-lockfile`, then 
 ## Remaining exact-revision release gate
 
 Run `bun install --frozen-lockfile`, `bun run check`, and `bun run test:e2e` on this exact tree. The release gate is zero Oxlint warnings, all unit/contract tests passing, no moderate-or-higher dependency audit findings, successful production build and unchanged gzip budgets, all 20 Playwright tests passing, and no serious/critical axe violations.
+
+
+# Latest verification — Imposter built-in category generation change (2026-11-08)
+
+## Source changes
+
+- Removed the static Imposter answer/hint catalogue from the source tree. `imposter-categories.ts` now contains metadata only; all 30 general report-named categories and the 18+ After Dark category remain, with stable pack IDs, names, descriptions and suitability. The unused `imposter-additional-words.ts` source was deleted.
+- Seed generation creates empty default Imposter category packs and no Imposter `ContentItem` entries.
+- Starting a built-in Imposter round chooses a selected category using the existing category cooldown, then sends that category's ID, title and description through `generateAiContent` with `game: imposter`, `itemKind: word`, and the normal configured provider order. Five words are requested per round. The global last-10 word exclusion and the category/item-kind queue are retained.
+- Setup treats metadata-only Imposter packs as deferred AI categories, displays `AI-GENERATED ON PLAY`, and permits the round to start. Manually authored/imported local word packs remain available without network access.
+- The backend generation prompt now requests exactly 20 distinct hints per word, matching `validateGeneratedItems`'s enforced schema.
+- Seed, shared-contract and Imposter category-selection tests were updated. Current documentation now records the report's 1,800-entry figure as historical source material rather than shipped KING-FUN content.
+
+## Verification performed in this authoring environment
+
+- `node scripts/check-release-contracts.mjs`: **153/153 checks passed**, including metadata-only built-in categories, mandatory provider-order generation, category title/description payloads, exact 20-hint validation and Settings-side metadata resolution for Imposter word generation.
+- TypeScript/TSX transpilation syntax check: **112 files, zero syntax diagnostics**. Node syntax checks passed for repository `.js`/`.mjs` scripts. JSON parse check: **14 files, zero errors**.
+- Bun 1.4.4 and workspace dependencies are not installed in this authoring environment. The exact revision has not been verified with native lint, semantic typechecks, Bun unit tests, `bun audit`, Vite production build/gzip budget, or Playwright/axe. Do not claim full release verification until these pass on the exact archive.
+
+## Acceptance notes
+
+- Built-in Imposter categories intentionally require internet/provider availability when no content-vault result is available. This is the requested tradeoff for removing hardcoded answer banks.
+- Manual local word packs are the offline play path. Provider/network failure must fail clearly and must not fall back to a different category's answers.
+- This change does not add online multiplayer, server-side game sessions, player-name transmission, or changes to documented Imposter rules.

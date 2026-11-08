@@ -1,7 +1,7 @@
 import type { ContentItem, ContentPack, GameId, Suitability } from '../domain/shared/contracts.ts'
 import { asContentId, asPackId } from '../domain/shared/ids.ts'
 import { parseContentItem, parseContentPack } from '../domain/shared/validation.ts'
-import { IMPOSTER_CATEGORY_BANKS } from './imposter-categories.ts'
+import { IMPOSTER_CATEGORIES } from './imposter-categories.ts'
 
 const CREATED_AT = Date.UTC(2026, 10, 3)
 const LICENSE = 'LicenseRef-Project-Original'
@@ -200,18 +200,6 @@ const ARCADE_DEFINITIONS: readonly SeedDefinition[] = [
 // Explicitly adult-tagged source content is kept separate from every all-ages pool.
 // These are suggestive / sexual-topic references, not graphic sexual instructions.
 const ADULT_DEFINITIONS: readonly SeedDefinition[] = [
-  { gameId: 'imposter', packId: 'pack-imposter-after-dark-v1', packName: 'After Dark · Vocabulary', description: 'Adult-topic vocabulary for groups who have explicitly enabled 18+ mode.', kind: 'word', categoryId: 'adult-vocabulary', suitability: 'adult', entries: [
-    ['adult-word-bdsm', 'BDSM', 'A consensual adult power-exchange umbrella term'],
-    ['adult-word-hentai', 'Hentai', 'A Japanese animation and comics genre'],
-    ['adult-word-penis', 'Penis', 'An anatomical term'],
-    ['adult-word-vagina', 'Vagina', 'An anatomical term'],
-    ['adult-word-condom', 'Condom', 'A barrier used in safer sex'],
-    ['adult-word-orgasm', 'Orgasm', 'A sexual-response term'],
-    ['adult-word-fetish', 'Fetish', 'A specific source of adult attraction'],
-    ['adult-word-sexting', 'Sexting', 'Sending intimate messages by phone'],
-    ['adult-word-virginity', 'Virginity', 'A cultural concept about sexual experience'],
-    ['adult-word-lingerie', 'Lingerie', 'Intimate apparel'],
-  ] },
   { gameId: 'guessup', packId: 'pack-guessup-after-dark-v1', packName: 'After Dark · Charades', description: 'Adult-leaning but non-graphic party acting prompts.', kind: 'phrase', categoryId: 'after-dark-scenes', suitability: 'adult', entries: [
     ['adult-guess-1', 'Trying to act normal after an awkward flirt'],
     ['adult-guess-2', 'Sending a risky text and instantly regretting it'],
@@ -311,17 +299,22 @@ for (const definition of [...DEFINITIONS, ...ARCADE_DEFINITIONS, ...ADULT_DEFINI
   }
 }
 
-for (const category of IMPOSTER_CATEGORY_BANKS) {
+// The built-in Imposter catalogue ships category metadata only. Secret words and
+// word-specific Mystic hints are generated on demand through the provider-order API.
+for (const category of IMPOSTER_CATEGORIES) {
   const packIdText = `pack-imposter-${category.id}-v1`
   const packId = asPackId(packIdText)
-  const ids = category.words.map((_, index) => asContentId(`imp-${category.id}-${index + 1}`))
-  category.words.forEach((text, index) => content.push(parseContentItem({
-    id: ids[index], gameId: 'imposter', kind: 'word', text, locale: 'en', packId,
-    categoryId: category.id, suitability: DEFAULT_SUITABILITY,
-    tags: ['imposter', category.id],
-    provenance: { source: SOURCE, license: LICENSE, creator: CREATOR, createdAt: CREATED_AT, reviewedAt: null },
-  })))
-  packs.set(packIdText, parseContentPack({ id: packId, gameId: 'imposter', name: category.name, description: category.description, locale: 'en', suitability: DEFAULT_SUITABILITY, version: 1, contentIds: ids, isDefault: true }))
+  packs.set(packIdText, parseContentPack({
+    id: packId,
+    gameId: 'imposter',
+    name: category.name,
+    description: category.description,
+    locale: 'en',
+    suitability: category.suitability ?? DEFAULT_SUITABILITY,
+    version: 1,
+    contentIds: [],
+    isDefault: true,
+  }))
 }
 
 export const SEEDED_CONTENT: readonly ContentItem[] = Object.freeze(content)

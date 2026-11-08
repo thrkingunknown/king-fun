@@ -48,7 +48,7 @@ This document is a concise implementation handoff. `requirements.md` and `instru
 - GuessUp has editable teams/decks, timed rounds, Correct/Pass, scoring, handoff, optional tilt/audio/haptics, and local reports.
 - Truth or Dare has all three player modes, separate player and Truth/Dare wheels, manual choice, reactions, replace/skip/opt-out/report.
 - I Have Never has all three player modes, neutral response methods, group responses, points/fingers/stories, skip, reactions, and reports.
-- Bundled Imposter bank contains 1,800 words across 30 categories (60/category), but currently four shared category-safe hints per answer. The requested 20 distinct word-specific clues per bundled answer remains a substantial human curation gap. Custom/AI words validate 20 distinct answer-safe hints.
+- All 30 general Imposter categories plus the 18+ After Dark category remain available as metadata-only packs. No built-in Imposter words/hints are bundled; category-first rounds pass the selected title/description through provider order and generate five words with exactly 20 distinct answer-safe hints each. Manual local packs remain the offline path.
 
 ### Phase 5 — AI provider gateway and hosting
 
@@ -61,7 +61,7 @@ This document is a concise implementation handoff. `requirements.md` and `instru
 
 ## Security and product invariants
 
-- Local gameplay must never depend on AI or network access.
+- Local gameplay state, rules, role assignment, voting and persistence remain device-local. The explicit content exception is the built-in metadata-only Imposter catalogue, which requires provider-order generation; manually authored/imported Imposter word packs and the other local content pools remain playable offline.
 - No BYOK/provider/Redis/Cloudflare secret may enter `VITE_` variables, localStorage, IndexedDB, backups, service-worker cache, logs, analytics, traces, or game snapshots.
 - No server-side game-state database, online Imposter, arbitrary URL proxy, or player-history upload.
 - Keep exact CORS origins, HTTPS production requests, bounded streamed input/output, concurrency/rate/request caps, kill switch, safe errors, and provider-side billing alerts. CORS is not authentication.
@@ -82,7 +82,7 @@ This document is a concise implementation handoff. `requirements.md` and `instru
 2. Resolve all lint/type/test/build diagnostics without weakening checks.
 3. Configure Vercel with root directory `.`, exact origins, shared Upstash-compatible REST limiter, Cloudflare server credentials, AI kill switch initially off, and provider usage/billing restrictions.
 4. Verify Preview routes and shared limiter behavior across multiple function instances with throwaway provider keys; inspect logs/traces for secret leakage.
-5. Complete browser/device/accessibility/offline acceptance and the remaining content-authoring tasks before release.
+5. Complete browser/device/accessibility/offline acceptance and verify runtime Imposter category prompt quality/provider failure handling before release.
 
 - On 2026-11-05 the user supplied the first full root `bun run check` log on Bun 1.4.4: frozen install and repository policy passed; Oxlint emitted one React immutability warning plus six intentional control-regex warnings; frontend typecheck failed at three `RequestInit.signal` call sites (`TS2379`) and the non-category fallback map (`TS7053`). The follow-up source fixes use `signal ?? null`, stable item-kind narrowing, elapsed-time music sequencing, and a shared control-character validator with tests. Full native rerun is still pending.
 

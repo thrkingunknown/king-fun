@@ -77,6 +77,36 @@ export function selectImposterWord<T extends { readonly id: string; readonly tex
 }
 
 /**
+ * Select a category before generating or drawing its word. Category cooldowns
+ * relax only when they would leave no eligible selected category.
+ */
+export function selectImposterCategory(
+  categoryIds: readonly string[],
+  recentCategoryIds: readonly string[],
+  categoryWindow: number,
+  randomIndex: (exclusiveMax: number) => number,
+): string | null {
+  if (!Number.isSafeInteger(categoryWindow) || categoryWindow < 0) {
+    throw new RangeError('Category cooldown must be a non-negative safe integer.')
+  }
+  if (categoryIds.some(id => typeof id !== 'string' || !id.trim())) {
+    throw new TypeError('Category IDs must be non-empty strings.')
+  }
+  if (new Set(categoryIds).size !== categoryIds.length) {
+    throw new TypeError('Category IDs must be unique.')
+  }
+  if (!categoryIds.length) return null
+
+  const eligible = [...categoryIds]
+  const cooled = new Set(categoryWindow === 0
+    ? []
+    : recentCategoryIds.filter(id => eligible.includes(id)).slice(-categoryWindow))
+  const outsideCooldown = eligible.filter(id => !cooled.has(id))
+  const categoryPool = outsideCooldown.length ? outsideCooldown : eligible
+  return categoryPool[checkedIndex(randomIndex, categoryPool.length, 'category')] ?? null
+}
+
+/**
  * Pick a category uniformly from eligible categories, then pick a word uniformly
  * inside that category. Category cooldowns may relax only when they would leave
  * no eligible category; word-repeat exclusions are never relaxed.

@@ -53,7 +53,7 @@ The report's recorded baseline values are Classic mode, one ordinary Mystic, Mys
 1. Select one category at random from the selected/eligible categories.
 2. Select a secret word from that category.
 3. Store the selected category and word as part of the committed round state before reveal.
-4. The report describes three possible content sources: bundled local word banks, manually created custom packs, and AI-generated content. King-Fun core gameplay must remain usable from local bundled/custom content without AI or a network connection.
+4. The report describes bundled local word banks, manually created custom packs, and AI-generated content. KING-FUN deliberately ships its built-in categories as metadata only: select a category first, then pass its title and description through the configured provider-order pipeline to generate category-specific words and hints. No built-in Imposter answer/hint bank is bundled. Manually authored/imported local word packs remain playable offline.
 5. The category is visible to every role. Only Civilians receive the word. Mystics receive indirect hint(s) only when hints are enabled. Mr. White receives neither word nor hint.
 
 When multiple Mystics exist and hints are enabled, they may receive either the same hint or different hints. If hinting is disabled, ordinary Mystics receive no hint. Mr. White never receives a hint.
@@ -95,7 +95,7 @@ When multiple Mystics exist and hints are enabled, they may receive either the s
 
 The report's static audit states 30 built-in categories, 1,800 word entries (60 per category), and 20 hints per entry (36,000 hint entries, with 531 unique hint strings). It warns that some entries are generic category-related terms rather than suitable secret answers and that some hints are semantically mismatched to their words. A passing count/duplicate audit does not prove clue quality.
 
-The current King-Fun bundled catalogue contains 1,800 concrete answers (60 per category), with four shared category-safe hints per answer. It does **not** yet contain 20 distinct, word-specific hints for every answer. Curating and reviewing those hints is an open content-quality task; do not pad the catalogue with generic or misleading clues.
+Current KING-FUN implementation retains the report's 30 category definitions as metadata-only packs and the additional 18+ After Dark category. No Imposter answer or hint entries are bundled. At round start, the selected category's title and description are sent through the ordered provider pipeline to generate five category-specific words with exactly 20 distinct answer-safe hints per word. Manual custom word/hint packs remain local and offline-capable; built-in categories need connectivity and provider availability.
 
 ## 5. Manual and AI custom categories
 

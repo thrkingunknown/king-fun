@@ -34,8 +34,14 @@ describe('AI generated content validation', () => {
 })
 
 describe('Imposter AI word clues', () => {
+  test('requires selected category title and description for word generation', () => {
+    const request = { schemaVersion: 1, requestId: 'imposter_test_123', game: 'imposter', itemKind: 'word', categoryId: 'animals', locale: 'en', suitability: 'general', count: 1, recentItems: [] }
+    expect(() => validateGenerateInput(request)).toThrow(SafeProviderError)
+    expect(validateGenerateInput({ ...request, categoryName: 'Animals', categoryDescription: 'Recognisable animals with clear habitats and traits.' }).categoryName).toBe('Animals')
+  })
+
   test('requires 20 distinct answer-safe hints for every generated word', () => {
-    const input = validateGenerateInput({ schemaVersion: 1, requestId: 'imposter_test_123', game: 'imposter', itemKind: 'word', categoryId: 'animals', locale: 'en', suitability: 'general', count: 1, recentItems: [] })
+    const input = validateGenerateInput({ schemaVersion: 1, requestId: 'imposter_test_123', game: 'imposter', itemKind: 'word', categoryId: 'animals', categoryName: 'Animals', categoryDescription: 'Recognisable animals with clear habitats, behaviours and traits.', locale: 'en', suitability: 'general', count: 1, recentItems: [] })
     const hints = Array.from({ length: 20 }, (_, index) => `Clue ${index + 1}`)
     expect(validateGeneratedItems({ items: [{ text: 'Penguin', hints }] }, input)[0]?.hints).toHaveLength(20)
     expect(() => validateGeneratedItems({ items: [{ text: 'Penguin', hints: hints.slice(0, 19) }] }, input)).toThrow(SafeProviderError)
@@ -60,7 +66,7 @@ describe('strict request and response boundaries', () => {
     expect(() => validateGeneratedItems({ items: [{ text: 'What is your biggest fear?', hints: [] }, { text: 'What is your biggest fear today?', hints: [] }] }, input)).toThrow(SafeProviderError)
   })
   test('requires exactly twenty distinct answer-safe hints', () => {
-    const input = validateGenerateInput({ schemaVersion: 1, requestId: 'imposter_test_123', game: 'imposter', itemKind: 'word', categoryId: 'animals', locale: 'en', suitability: 'general', count: 1, recentItems: [] })
+    const input = validateGenerateInput({ schemaVersion: 1, requestId: 'imposter_test_123', game: 'imposter', itemKind: 'word', categoryId: 'animals', categoryName: 'Animals', categoryDescription: 'Recognisable animals with clear habitats, behaviours and traits.', locale: 'en', suitability: 'general', count: 1, recentItems: [] })
     const hints = Array.from({ length: 20 }, (_, index) => `Penguin clue ${index + 1}`)
     expect(() => validateGeneratedItems({ items: [{ text: 'Penguin', hints }] }, input)).toThrow(SafeProviderError)
   })

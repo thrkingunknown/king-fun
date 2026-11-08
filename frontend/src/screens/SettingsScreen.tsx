@@ -5,6 +5,7 @@ import type { MotionPreference } from '../types.ts'
 import { Icon } from '../components/ui/Icon.tsx'
 import { ToggleSwitch } from '../components/ui/ToggleSwitch.tsx'
 import { SortableProviderRow } from '../components/settings/SortableProviderRow.tsx'
+import { IMPOSTER_CATEGORIES } from '../content/imposter-categories.ts'
 
 const AI_GAMES: Array<{ value: AiGame; label: string; defaultCategory: string; kinds: AiItemKind[] }> = [
   { value: 'imposter', label: 'Imposter', defaultCategory: 'animals', kinds: ['word', 'category'] },
@@ -79,6 +80,12 @@ function SettingsScreenContent(props: Props) {
   const [aiCategoryName, setAiCategoryName] = useState('')
   const [aiCategoryDescription, setAiCategoryDescription] = useState('')
   const [aiCategoryEmoji, setAiCategoryEmoji] = useState('🃏')
+  const selectedImposterCategory = aiGame === 'imposter'
+    ? IMPOSTER_CATEGORIES.find(category => category.id === aiCategory)
+    : undefined
+  const aiThemeName = aiCategoryName.trim() || selectedImposterCategory?.name || ''
+  const aiThemeDescription = aiCategoryDescription.trim() || selectedImposterCategory?.description || ''
+  const requiresCustomImposterMetadata = aiGame === 'imposter' && aiKind === 'word' && !selectedImposterCategory
   const [aiBusy, setAiBusy] = useState(false)
   const [aiOutput, setAiOutput] = useState<AiGeneratedItem[]>([])
   const [aiSource, setAiSource] = useState<AiGenerationProvider | null>(null)
@@ -113,7 +120,10 @@ function SettingsScreenContent(props: Props) {
     const suitability = props.adultMode ? 'adult' : 'general'
     try {
       const count = aiGame === 'imposter' && aiKind === 'word' ? 1 : 5
-      const result = await generateAiContent({ game: aiGame, itemKind: aiKind, categoryId: aiCategory, ...(aiCategoryName.trim() ? { categoryName: aiCategoryName.trim() } : {}), ...(aiCategoryDescription.trim() ? { categoryDescription: aiCategoryDescription.trim() } : {}), count, suitability, adultMode: suitability === 'adult', recentItems: props.getRecentAiItems(aiGame, aiKind, aiCategory, suitability) }, controller.signal)
+      if (aiGame === 'imposter' && aiKind === 'word' && (!aiThemeName || !aiThemeDescription)) {
+        throw new Error('Enter a category title and description for this custom Imposter theme.')
+      }
+      const result = await generateAiContent({ game: aiGame, itemKind: aiKind, categoryId: aiCategory, ...(aiThemeName ? { categoryName: aiThemeName } : {}), ...(aiThemeDescription ? { categoryDescription: aiThemeDescription } : {}), count, suitability, adultMode: suitability === 'adult', recentItems: props.getRecentAiItems(aiGame, aiKind, aiCategory, suitability) }, controller.signal)
       if (controller.signal.aborted || generationControllerRef.current !== controller) return
       setAiOutput(result.items)
       setAiSource(result.provider)
@@ -245,16 +255,16 @@ function SettingsScreenContent(props: Props) {
               <input value={aiCategory} maxLength={64} onChange={event => setAiCategory(event.currentTarget.value.toLowerCase().replace(/[^a-z0-9_-]/g, '-'))} placeholder="e.g. animals, travel"/>
             </label>
           </div>
-          <label>Theme title (optional, sent to API)
-            <input value={aiCategoryName} maxLength={80} onChange={event => setAiCategoryName(event.currentTarget.value)} placeholder="Short title for this theme"/>
+          <label>Theme title {aiGame === 'imposter' && aiKind === 'word' ? '(required for custom themes; built-ins use saved metadata)' : '(optional, sent to API)'}
+            <input value={aiCategoryName} maxLength={80} required={requiresCustomImposterMetadata} onChange={event => setAiCategoryName(event.currentTarget.value)} placeholder={selectedImposterCategory?.name ?? 'Short title for this theme'}/>
           </label>
-          <label>Theme description (optional, sent to API)
-            <input value={aiCategoryDescription} maxLength={180} onChange={event => setAiCategoryDescription(event.currentTarget.value)} placeholder="Short description for generation"/>
+          <label>Theme description {aiGame === 'imposter' && aiKind === 'word' ? '(required for custom themes; built-ins use saved metadata)' : '(optional, sent to API)'}
+            <input value={aiCategoryDescription} maxLength={180} required={requiresCustomImposterMetadata} onChange={event => setAiCategoryDescription(event.currentTarget.value)} placeholder={selectedImposterCategory?.description ?? 'Short description for generation'}/>
           </label>
           {aiGame === 'imposter' && <label>Pack emoji
             <input value={aiCategoryEmoji} maxLength={8} onChange={event => setAiCategoryEmoji(event.currentTarget.value)} placeholder="🃏"/>
           </label>}
-          <button type="button" className="setting-action" disabled={aiBusy || !aiCategory.trim()} onClick={() => void generate()}>
+          <button type="button" className="setting-action" disabled={aiBusy || !aiCategory.trim() || (requiresCustomImposterMetadata && (!aiCategoryName.trim() || !aiCategoryDescription.trim()))} onClick={() => void generate()}>
             {aiBusy ? 'Generating…' : aiKind === 'category' ? 'Generate categories' : 'Generate items'}
           </button>
           <p role="status" aria-live="polite">{aiError}</p>
