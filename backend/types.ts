@@ -24,6 +24,8 @@ export type GenerateInput = {
   count: number
   playerCount?: number
   playerNames?: string[]
+  /** Names of player(s) whose turn it is now — prompt must target them, not others. */
+  currentTurnPlayerNames?: string[]
   recentItems: string[]
 }
 export type GeneratedItem = { id: string; text: string; categoryId: string; kind: ItemKind; locale: string; hints?: string[]; description?: string; emoji?: string }
