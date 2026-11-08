@@ -109,7 +109,7 @@ const DEFAULT_OPTIONS: ArcadeSetupOptions = {
 }
 
 function pickOne<T>(items: readonly T[]): T {
-  if (items.length === 0) throw new RangeError('This game has no playable content in the selected pack.')
+  if (items.length === 0) throw new RangeError('This game could not load a playable prompt. Retry generation and try again.')
   return items[secureRandomInteger(items.length)]!
 }
 function shuffleDeck(items: readonly ArcadeContent[]): ArcadeContent[] {

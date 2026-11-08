@@ -43,11 +43,23 @@ export function removeAiProviderKey(provider: 'gemini' | 'groq') { const next = 
 export function setAiProviderStatus(provider: AiProvider, value: string) { status = { ...status, [provider]: value }; emit() }
 export function getAiProviderKey(provider: 'gemini' | 'groq') { return keys[provider] }
 export function getAiProviderOrder(): AiProvider[] { return [...preferences.order.filter(p => preferences.enabled[p] && Boolean(keys[p])), 'cloudflare-workers-ai'] }
-const configuredApiBase = (import.meta.env.VITE_KING_FUN_API_URL as string | undefined)?.trim().replace(/\/$/, '')
-// Web/PWA: same-origin `/api`. Packaged Tauri: set VITE_KING_FUN_API_URL=https://YOUR_PROJECT.vercel.app/api
-const apiBase = configuredApiBase || '/api'
-export function getAiApiBase() { return apiBase }
 function isLoopbackHost(host: string) { return ['localhost', '127.0.0.1', '[::1]', '::1'].includes(host) }
+function normalizeApiBase(value: string | undefined): string {
+  const configured = value?.trim().replace(/\/$/, '')
+  if (!configured) return '/api'
+  try {
+    const parsed = new URL(configured, 'https://king-fun.invalid')
+    if ((parsed.pathname === '' || parsed.pathname === '/') && !isLoopbackHost(parsed.hostname)) parsed.pathname = '/api'
+    return parsed.origin === 'https://king-fun.invalid'
+      ? `${parsed.pathname}${parsed.search}`
+      : `${parsed.origin}${parsed.pathname}${parsed.search}`
+  } catch {
+    return configured
+  }
+}
+// Web/PWA: same-origin `/api`. Packaged Tauri: set VITE_KING_FUN_API_URL=https://YOUR_PROJECT.vercel.app/api
+const apiBase = normalizeApiBase(import.meta.env.VITE_KING_FUN_API_URL as string | undefined)
+export function getAiApiBase() { return apiBase }
 function isTauriRuntime() {
   if (typeof window === 'undefined') return false
   return '__TAURI_INTERNALS__' in window || '__TAURI__' in window
@@ -67,6 +79,18 @@ function assertSecureTransport(): void {
   }
 }
 
+async function readJsonResponse(response: Response): Promise<Record<string, unknown>> {
+  const raw = await response.text()
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('The API returned an invalid response shape.')
+    return parsed as Record<string, unknown>
+  } catch {
+    const detail = raw.replace(/\s+/g, ' ').trim().slice(0, 160)
+    throw new Error(`The API returned a non-JSON response (${response.status})${detail ? `: ${detail}` : '.'}`)
+  }
+}
+
 export async function getAiBackendStatus(signal?: AbortSignal) {
   assertSecureTransport()
   const response = await apiFetch(`${apiBase}/v1/status`, { signal: signal ?? null, headers: { accept: 'application/json' }, cache: 'no-store' })
@@ -79,7 +103,7 @@ export async function testAiProvider(provider: AiProvider, signal?: AbortSignal)
   const key = provider === 'cloudflare-workers-ai' ? undefined : keys[provider]
   if (provider !== 'cloudflare-workers-ai' && !key) throw new Error('Add a session API key before testing this provider.')
   const response = await apiFetch(`${apiBase}/v1/content/generate`, { method: 'POST', signal: signal ?? null, cache: 'no-store', headers: { 'content-type': 'application/json', 'x-provider-id': provider, 'x-provider-test': 'true', ...(key ? { 'x-provider-key': key } : {}) }, body: JSON.stringify({ schemaVersion: 1, requestId: crypto.randomUUID(), game: 'truth-or-dare', itemKind: 'truth', categoryId: `connection-test-${crypto.randomUUID().slice(0, 8)}`, locale: 'en', suitability: 'general', count: 1, recentItems: [] }) })
-  const body = await response.json() as { items?: AiGeneratedItem[]; cacheHit?: boolean; error?: { message?: string } }
+  const body = await readJsonResponse(response) as { items?: AiGeneratedItem[]; cacheHit?: boolean; error?: { message?: string } }
   if (!response.ok || body.cacheHit || !Array.isArray(body.items) || body.items.length === 0) throw new Error(body.error?.message ?? (body.cacheHit ? 'The content vault returned a cached item; a live provider test requires a fresh category.' : `Provider test failed (${response.status}).`))
   setAiProviderStatus(provider, 'Connection test passed')
   return true
@@ -87,7 +111,7 @@ export async function testAiProvider(provider: AiProvider, signal?: AbortSignal)
 
 function localCuratedFallback(input: { game: AiGame; itemKind: AiItemKind; categoryId: string; count?: number; recentItems?: string[]; locale?: string; suitability?: 'general' | 'teen' | 'adult' }, reason: string) {
   const itemKind = input.itemKind
-  if (itemKind === 'category') throw new Error('Offline category generation is not available. Use the API when online, or continue with existing packs.')
+  if (itemKind === 'category') throw new Error(`${reason} Category generation requires the API.`)
   const kindMap: Record<Exclude<AiItemKind, 'category'>, string> = { word: 'word', charade: 'phrase', truth: 'truth', dare: 'dare', statement: 'never-have-i-ever', 'party-prompt': 'party-prompt' }
   const locale = input.locale ?? 'en'
   const recent = new Set((input.recentItems ?? []).map(value => value.normalize('NFKC').trim().toLocaleLowerCase(locale)))
@@ -99,8 +123,15 @@ function localCuratedFallback(input: { game: AiGame; itemKind: AiItemKind; categ
     && (input.suitability ? item.suitability === input.suitability : item.suitability === 'general')
     && !recent.has(item.text.normalize('NFKC').trim().toLocaleLowerCase(locale)),
   )
-  const selected = secureShuffle(matching).slice(0, Math.min(5, Math.max(1, input.count ?? 5)))
-  if (!selected.length) throw new Error(`${reason} No unused content is available offline for this selection; connect to the internet to generate from the vault/LLM or choose a different pack.`)
+  const sameGameFallback = SEEDED_CONTENT.filter(item =>
+    item.gameId === input.game
+    && item.kind === kindMap[itemKind]
+    && item.locale === locale
+    && (input.suitability ? item.suitability === input.suitability : item.suitability === 'general')
+    && !recent.has(item.text.normalize('NFKC').trim().toLocaleLowerCase(locale)),
+  )
+  const selected = secureShuffle(matching.length ? matching : sameGameFallback).slice(0, Math.min(5, Math.max(1, input.count ?? 5)))
+  if (!selected.length) throw new Error(`${reason} Content generation is unavailable right now. Retry when the API is reachable.`)
   return {
     provider: 'local-curated' as const,
     items: selected.map(item => ({ id: item.id, text: item.text, categoryId: item.categoryId, kind: input.itemKind, locale: item.locale, ...(item.hints?.length ? { hints: [...item.hints] } : {}) })),
@@ -147,7 +178,7 @@ export async function generateAiContent(input: AiContentRequest, signal?: AbortS
     if (provider !== 'cloudflare-workers-ai' && !key) continue
     try {
       const response = await apiFetch(`${apiBase}/v1/content/generate`, { method: 'POST', signal: signal ?? null, cache: 'no-store', headers: { 'content-type': 'application/json', 'x-provider-id': provider, ...(key ? { 'x-provider-key': key } : {}) }, body: JSON.stringify({ schemaVersion: 1, requestId: crypto.randomUUID(), game: input.game, itemKind: input.itemKind, categoryId: input.categoryId, ...(input.categoryName ? { categoryName: input.categoryName.slice(0, 120) } : {}), ...(input.categoryDescription ? { categoryDescription: input.categoryDescription.slice(0, 280) } : {}), locale: input.locale ?? 'en', suitability, adultMode, count: Math.min(5, Math.max(1, input.count ?? 5)), ...(input.playerCount ? { playerCount: input.playerCount } : {}), ...(input.playerNames?.length ? { playerNames: input.playerNames.slice(0, 32).map(name => name.trim().slice(0, 80)) } : {}), recentItems: (input.recentItems ?? []).slice(-30) }) })
-      const body = await response.json() as { items?: AiGeneratedItem[]; cacheHit?: boolean; provider?: string; error?: { code?: string; message?: string; retryable?: boolean } }
+      const body = await readJsonResponse(response) as { items?: AiGeneratedItem[]; cacheHit?: boolean; provider?: string; error?: { code?: string; message?: string; retryable?: boolean } }
       if (!response.ok || !Array.isArray(body.items)) {
         lastError = body.error?.message ?? `Provider request failed (${response.status}).`
         setAiProviderStatus(provider, lastError)
