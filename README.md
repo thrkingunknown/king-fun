@@ -9,7 +9,7 @@ KING-FUN is an original, free/open-source, local-first party-game PWA with 27 se
 - **Frontend:** React 19, Vite, TypeScript, accessible responsive UI, and installable offline PWA.
 - **Backend:** Elysia + Bun public AI gateway in the root-level `backend/` workspace.
 - **Workspace/toolchain:** Bun 1.4.4, one root `package.json`, two workspaces (`frontend/`, `backend/`), and one root `bun.lock`. Do not add npm, pnpm, Yarn, a second lockfile, or package-manager scripts from those tools.
-- **API deployment adapter:** root `api/[[...all]].ts`, targeting Vercel Bun Functions. Frontend and API use the same origin and `/api` by default.
+- **Vercel deployment:** `frontend/` and `backend/` deploy as public Vercel Services; `/api` routes to the Elysia backend and `src-tauri/` is excluded.
 - **Domain design:** framework-independent game rules, schemas, random selection, and persistence contracts remain in `frontend/src/domain/`.
 - **Randomness:** Web Crypto with rejection-sampled integer selection. Committed game outcomes are durably persisted before reveal/animation when IndexedDB is available.
 - **Startup loading:** The HTML entry is intentionally small; IndexedDB bootstrap and the React application shell load as async chunks while an accessible startup state is shown. The production budget measures the entry and deferred `AppShell` chunk separately.

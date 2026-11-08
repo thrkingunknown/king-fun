@@ -66,7 +66,7 @@ Current structure:
 
 ```text
 .
-  api/[[...all]].ts       # Vercel function adapter
+  backend/vercel.ts       # Vercel Elysia service entrypoint
   backend/
     index.ts              # Elysia app and Web Request handler
     dev.ts                # Local Bun server
@@ -244,7 +244,7 @@ The free/open-source status of King-Fun does not make Gemini, Groq, or Cloudflar
 
 ## Phase 5 implementation notes (2026-11-05)
 
-The Elysia service now lives in root `backend/`; the Vercel function adapter is root `api/[[...all]].ts`. The root Bun workspace contains `@king-fun/frontend` and `@king-fun/backend`. The dev frontend proxies `/api` to the local backend on `127.0.0.1:3001`; Vercel is configured from repository root and emits `frontend/dist`.
+The Elysia service lives in root `backend/`, with `backend/vercel.ts` as its Vercel Services entrypoint. The root Bun workspace contains `@king-fun/frontend` and `@king-fun/backend`. The dev frontend proxies `/api` to the local backend on `127.0.0.1:3001`; Vercel deploys the frontend and backend as separate services and routes `/api/*` to the backend. `src-tauri/` is not deployed to Vercel.
 
 Source includes `/healthz`, `/v1/status`, and `/v1/content/generate`; fixed Gemini, Groq, and Cloudflare Workers AI adapters; strict request and provider-output validation; 12 KB streamed request and 128 KB streamed response ceilings; HTTPS/origin/content-type/provider checks; safe errors; provider timeouts; and session-memory BYOK. The key dialog requires an explicit consent acknowledgement before saving a key and explains the gateway/provider transit. Provider preferences only are persisted. Cloudflare credentials are server-only. Curated local fallback is used when remote generation fails and matching unused local content exists.
 

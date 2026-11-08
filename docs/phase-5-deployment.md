@@ -1,12 +1,12 @@
 # Phase 5 deployment and operator runbook
 
-**Architecture:** root Bun workspace, `frontend/` static PWA, root-level `backend/` Elysia service, Vercel Bun Functions adapter at `api/[[...all]].ts`.
+**Architecture:** root Bun workspace, `frontend/` Vite service, and `backend/` Elysia service deployed through Vercel Services. `src-tauri/` is not deployed to Vercel.
 
 **Release state (2026-11-05):** deployment configuration and gateway source are implemented. The user confirmed Bun 1.4.4 frozen install and repository policy pass, then supplied a full run where both workspace typechecks, 161 tests, and the frontend production build passed. A subsequent archive removes the 16 Oxlint `no-useless-escape` warnings in provider test fixtures without changing their runtime string values. The Phase 6 root check now also includes release-contract tests, bundle-budget checks, and `bun audit --audit-level=moderate`; run it on the exact Phase 6 archive before release. No live deployment, provider credentials, billing controls, or hosted recovery rehearsal have been configured by this work. For local development, `bun run dev:backend` uses process watch/restart; `bun run dev:backend:hot` uses Bun hot module reload.
 
 ## 1. Deployment topology
 
-Use one Vercel project for the static frontend and `/api/*` functions. This keeps the browser and gateway same-origin by default, avoids a cross-origin BYOK transport, and avoids exposing a separate API hostname. The root Vercel catch-all strips only the fixed `/api` prefix and forwards the Web `Request` to `backend/index.ts`. The catch-all function exports an Elysia application as its default export, matching Vercel's documented Elysia entrypoint contract. Its two `/api` routes strip only the public prefix before delegating to the canonical prefix-free backend app. The root `vercel.json` selects Bun with `bunVersion: "1.x"`; this is the only currently documented valid value, and Vercel manages the minor and patch versions. The repository and CI remain pinned to Bun 1.4.4, so verify the managed Vercel runtime against the workspace in Preview. Vercel currently labels its Bun runtime Beta; Elysia deployments are documented, but this mixed Vite static-output + Elysia catch-all configuration still needs a Preview smoke test. See [Vercel Bun Functions](https://vercel.com/docs/functions/runtimes/bun) and [Elysia on Vercel](https://vercel.com/docs/frameworks/backend/elysia).
+Use one Vercel project with two public services: the Vite frontend at `/` and the Elysia backend at `/api/*`. This keeps the browser and gateway same-origin by default, avoids a cross-origin BYOK transport, and avoids exposing a separate API hostname. The backend service entrypoint accepts both the public `/api` prefix and the path after Vercel service rewriting before delegating to the canonical prefix-free backend app. No service binding is required because the browser calls the backend through the public same-origin rewrite and the backend calls only external providers and data services. `src-tauri/` is intentionally excluded from the Vercel service list. See [Vercel Services](https://vercel.com/docs/services) and [Elysia on Vercel](https://vercel.com/docs/frameworks/backend/elysia).
 
 Repository settings:
 
@@ -18,7 +18,7 @@ Repository settings:
 | Build Command | `bun run build` |
 | Output Directory | `frontend/dist` |
 | Function runtime | Bun `1.x` managed by Vercel; local/CI toolchain pinned to 1.4.4 |
-| API entrypoint | `api/[[...all]].ts` |
+| API entrypoint | `backend/vercel.ts` |
 
 Do not set Vercel's Root Directory to `frontend/`; that would exclude the sibling `backend/`, root workspace manifest, root lockfile, and root API adapter. Do not deploy the frontend as one project and the Elysia gateway as another unless the owner approves a separate-origin architecture and updates CORS/API-origin policy.
 

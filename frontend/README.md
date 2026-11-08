@@ -30,7 +30,7 @@ bun run preview
 
 ## Backend and AI integration
 
-The Elysia + Bun API is no longer inside this package. It lives in the sibling root `../backend/` workspace, and Vercel requests are adapted by the root `../api/[[...all]].ts`. The frontend Vite dev server proxies `/api` to `http://127.0.0.1:3001`; launch it from the root with `bun run dev:backend`.
+The Elysia + Bun API is no longer inside this package. It lives in the sibling root `../backend/` workspace, with `../backend/vercel.ts` as its Vercel Services entrypoint. The frontend Vite dev server proxies `/api` to `http://127.0.0.1:3001`; launch it from the root with `bun run dev:backend`.
 
 Phase 5 source includes Gemini/Groq/Cloudflare Workers AI adapters, strict schema validation, bounded streaming requests/responses, safe errors, session-only BYOK, explicit key-transit consent, provider priority, local curated fallback, and shared Redis-compatible production limits. Provider keys stay in tab memory; only provider order/enabled flags persist. Cloudflare/Redis credentials remain server-only.
 

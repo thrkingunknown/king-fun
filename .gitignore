@@ -32,3 +32,6 @@ src-tauri/gen/
 # Tauri / Rust
 src-tauri/target/
 src-tauri/gen/
+tauri-updater.key
+tauri-updater.key.pub
+king-fun.jks

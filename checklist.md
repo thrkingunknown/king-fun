@@ -100,7 +100,7 @@ The latest user-machine baseline had all 188 unit/contracts, semantic typechecks
 - [x] Provider ordering supports keyboard move controls; Cloudflare has no gear or toggle. (`FR-AI-003`, `FR-AI-005`)
 - [x] Provider preferences persist while BYOK secrets remain tab-memory-only and clear on reload/tab close. (`FR-AI-010`, `NFR-SEC-008`)
 - [x] Key dialog requires explicit consent and discloses transit through the King-Fun gateway to the chosen provider. (`FR-AI-010`)
-- [x] Root `backend/` Elysia + Bun workspace exposes liveness, readiness, and one-provider generation routes; root `api/[[...all]].ts` adapts `/api/*`. (`FR-AI-009`)
+- [x] Root `backend/` Elysia + Bun workspace exposes liveness, readiness, and one-provider generation routes; `backend/vercel.ts` adapts `/api/*` through the Vercel backend service. (`FR-AI-009`)
 - [x] Provider adapters exist for Gemini, Groq, and Cloudflare Workers AI; Cloudflare secrets are server-only and pinned last. (`FR-AI-005`)
 - [x] Request schema/provider allowlists, streamed 12 KB request and 128 KB response bounds, timeouts, fixed HTTPS URLs, safe errors, canonical duplicate checks, and output constraints are implemented. (`FR-AI-007`, `FR-AI-012`)
 - [x] Production exact-origin/HTTPS checks, global kill switch, shared atomic Redis-compatible per-client minute/global daily/provider daily/concurrency controls, HMAC address hashing, and fail-closed missing/unhealthy-store behavior are implemented. (`FR-AI-011`)
