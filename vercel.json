@@ -4,7 +4,7 @@
   "services": {
     "backend": {
       "root": "backend",
-      "runtime": "bun",
+      "framework": "elysia",
       "entrypoint": "vercel.ts",
       "installCommand": "bun install",
       "functions": {
