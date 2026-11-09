@@ -471,3 +471,10 @@ Reference flows are documented in `docs/gameplay-reference.md`. Original copy, c
 - [ ] Run the pinned Bun 1.4.4 root `bun run check` against the latest ambient-renderer lifecycle patch. The previous user log stopped at frontend typecheck with a React Compiler warning and TS18049 context errors; source changes now address both.
 - [ ] Run `bun run test:e2e` against the latest patch. The immediately preceding user-provided run passed all 20 tests, including accessibility scan and every-added-controller smoke test.
 - [ ] Confirm the full security audit and production Vite/gzip budgets; these stages were not reached by the supplied `check` log.
+
+
+## 2026-11-09 — Latest archive verification follow-up
+- [x] Move Party Arcade non-component preload exports out of the React Fast Refresh component module.
+- [x] Align release-contract tests with game-specific home preload callbacks and the remaining-budget abort signal.
+- [x] Add coverage for all 23 added-game controller-family mappings and no-op original-game preloads.
+- [ ] Run `bun run check` and `bun run test:e2e` with Bun 1.4.4 and installed dependencies on this exact archive.

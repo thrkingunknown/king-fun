@@ -194,7 +194,32 @@ export async function testAiProvider(provider: AiProvider, signal?: AbortSignal)
   assertSecureTransport()
   const key = provider === 'cloudflare-workers-ai' ? undefined : keys[provider]
   if (provider !== 'cloudflare-workers-ai' && !key) throw new Error('Add a session API key before testing this provider.')
-  const response = await apiFetch(`${apiBase}/v1/content/generate`, { method: 'POST', signal: signal ?? null, cache: 'no-store', headers: { 'content-type': 'application/json', 'x-provider-id': provider, 'x-provider-test': 'true', ...(key ? { 'x-provider-key': key } : {}) }, body: JSON.stringify({ schemaVersion: 1, requestId: crypto.randomUUID(), game: 'truth-or-dare', itemKind: 'truth', categoryId: `connection-test-${crypto.randomUUID().slice(0, 8)}`, locale: 'en', suitability: 'general', count: 1, recentItems: [] }) })
+  const testRequest = provider === 'cloudflare-workers-ai'
+    ? {
+        schemaVersion: 1,
+        requestId: crypto.randomUUID(),
+        game: 'imposter',
+        itemKind: 'word',
+        categoryId: 'animals',
+        categoryName: 'Animals',
+        categoryDescription: 'Recognizable animals with clear habitats, behaviours and traits.',
+        locale: 'en',
+        suitability: 'general',
+        count: 1,
+        recentItems: [],
+      }
+    : {
+        schemaVersion: 1,
+        requestId: crypto.randomUUID(),
+        game: 'truth-or-dare',
+        itemKind: 'truth',
+        categoryId: `connection-test-${crypto.randomUUID().slice(0, 8)}`,
+        locale: 'en',
+        suitability: 'general',
+        count: 1,
+        recentItems: [],
+      }
+  const response = await apiFetch(`${apiBase}/v1/content/generate`, { method: 'POST', signal: signal ?? null, cache: 'no-store', headers: { 'content-type': 'application/json', 'x-provider-id': provider, 'x-provider-test': 'true', ...(key ? { 'x-provider-key': key } : {}) }, body: JSON.stringify(testRequest) })
   const body = await readJsonResponse(response) as { items?: AiGeneratedItem[]; cacheHit?: boolean; error?: { message?: string } }
   if (!response.ok || body.cacheHit || !Array.isArray(body.items) || body.items.length === 0) throw new Error(body.error?.message ?? (body.cacheHit ? 'The content vault returned a cached item; a live provider test requires a fresh category.' : `Provider test failed (${response.status}).`))
   setAiProviderStatus(provider, 'Connection test passed')

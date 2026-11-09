@@ -17,8 +17,8 @@ function responseSchemaFor(input: GenerateInput) {
   const isImposterWord = input.game === 'imposter' && input.itemKind === 'word'
   const hintsSchema = {
     type: 'array',
+    ...(isImposterWord ? { minItems: 20, maxItems: 20, description: 'Exactly 20 distinct, indirect hints, each 1–2 words.' } : {}),
     items: { type: 'string' },
-    ...(isImposterWord ? { description: 'Exactly 20 distinct, indirect hints, each 1–2 words.' } : {}),
   }
   const itemProperties = input.itemKind === 'category'
     ? {
@@ -42,6 +42,8 @@ function responseSchemaFor(input: GenerateInput) {
     properties: {
       items: {
         type: 'array',
+        minItems: input.count,
+        maxItems: input.count,
         items: { type: 'object', properties: itemProperties, required, additionalProperties: false },
       },
     },
@@ -311,12 +313,11 @@ export function normalizeGenerationInput(input: GenerateInput): GenerateInput {
   return input
 }
 
-function getProviderOutputTokenLimit(_provider: ProviderId, _input: GenerateInput, configuredLimit: number): number {
-  // GPT-OSS is a reasoning model and Cloudflare's max_tokens is the complete
-  // generation budget. Do not impose smaller per-game ceilings here: reasoning
-  // plus the final JSON must fit under the same limit. The shared operator cap
-  // remains authoritative, while defaults are 6,000 for Imposter and 4,000 for
-  // other requests. Gemini/Groq continue using their own configured budgets.
+function getProviderOutputTokenLimit(provider: ProviderId, input: GenerateInput, configuredLimit: number): number {
+  // Imposter uses a dedicated non-reasoning model with native JSON Schema mode,
+  // so its compact one-word/twenty-hint response does not need GPT-OSS's larger
+  // reasoning allowance. Other Cloudflare tasks retain the GPT-OSS budget.
+  if (provider === 'cloudflare-workers-ai' && input.game === 'imposter' && input.itemKind === 'word') return 2048
   return configuredLimit
 }
 function validateModel(value: string, provider: ProviderId): string {
@@ -376,7 +377,16 @@ export async function generateWithProvider(
   } else {
     if (!env.CLOUDFLARE_ACCOUNT_ID || !/^[a-f0-9]{32}$/i.test(env.CLOUDFLARE_ACCOUNT_ID)) throw new SafeProviderError('PROVIDER_NOT_CONFIGURED', 'Cloudflare Workers AI is not configured by the operator.', false, 503)
     if (!env.CLOUDFLARE_API_TOKEN || env.CLOUDFLARE_API_TOKEN.length < 20) throw new SafeProviderError('PROVIDER_NOT_CONFIGURED', 'Cloudflare Workers AI is not configured by the operator.', false, 503)
-    const model = validateModel(env.CLOUDFLARE_AI_MODEL || '@cf/openai/gpt-oss-20b', provider)
+    const isCloudflareImposterWord = input.game === 'imposter' && input.itemKind === 'word'
+    // GPT-OSS 20B is not in Cloudflare's published JSON Mode support matrix.
+    // Imposter requires exact structured output (one word + 20 hints), so route
+    // only this task to a model Cloudflare explicitly documents for JSON Schema.
+    const model = validateModel(
+      isCloudflareImposterWord
+        ? '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
+        : env.CLOUDFLARE_AI_MODEL || '@cf/openai/gpt-oss-20b',
+      provider,
+    )
     data = await fetchJson(`https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`, {
       method: 'POST',
       headers: { authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`, 'content-type': 'application/json' },
@@ -395,8 +405,11 @@ export async function generateWithProvider(
           { role: 'user', content: prompt },
         ],
         max_tokens: maxOutputTokens,
-        response_format: { type: 'json_object' },
-        reasoning_effort: 'low',
+        response_format: isCloudflareImposterWord
+          ? { type: 'json_schema', json_schema: responseSchemaFor(input) }
+          : { type: 'json_object' },
+        ...(isCloudflareImposterWord ? {} : { reasoning_effort: 'low' }),
+        ...(isCloudflareImposterWord ? { temperature: 0.2 } : {}),
         // Do not wait in Cloudflare's capacity queue: this serverless request
         // has a strict 60s host deadline and should surface capacity as 429.
         options: { rejectIfBusy: true },

@@ -1,3 +1,11 @@
+## 2026-11-09 — Cloudflare Imposter structured-output fix
+
+- Routed only Cloudflare Imposter one-word/twenty-hint generation to `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, which Cloudflare lists as supporting JSON Mode. GPT-OSS 20B remains the configured/default model for other Cloudflare games.
+- Imposter requests now use Cloudflare JSON Schema mode with exactly one item and exactly twenty hints, a compact 2,048-token budget, and no GPT-OSS reasoning parameter. Backend content validation remains authoritative.
+- Changed the Cloudflare Settings test to run the exact Imposter one-word/twenty-hint generation contract instead of a trivial Truth prompt, so Settings now validates the previously failing path.
+- Added provider-adapter and release-contract regression coverage for model selection, structured schema bounds, and Settings probe parity.
+- Sources: Cloudflare JSON Mode support matrix and Llama 3.3 70B FP8 Fast model documentation.
+
 ## 2026-11-09 — Cloudflare GPT-OSS completion budget follow-up
 
 - Removed restrictive Cloudflare per-game token caps that could truncate GPT-OSS before the final JSON was complete. Imposter now receives the full 6,000-token task allowance; other Cloudflare requests retain the 4,000-token default.
@@ -1270,3 +1278,39 @@ Release process:
 - Constructed the Cloudflare truncation diagnostic from two sentence fragments joined with one explicit space. This prevents a missing separator from reappearing through a concatenated string edit while retaining the formatted task-specific token budget.
 - Expressed the intentionally truncated JSON response fixture as a template literal with no unnecessary quote escapes. The test continues to exercise `finish_reason: 'length'` before partial JSON parsing.
 - Scope remains limited to the backend provider diagnostic and its provider adapter regression test; no provider request behavior or game logic changed.
+
+
+## 2026-11-09 — Lazy game-setup transition reliability
+
+- Home game-card pointer/focus intent now preloads the deferred seed catalogue and SetupScreen chunk, reducing the amount of work left after the player clicks.
+- Game launch shows immediate visual feedback while those chunks load, then preserves the existing reduced-motion-aware transition. Concurrent launch intents are sequenced so an earlier click cannot override a later selection.
+- A rejected seed-content import clears its cached promise so transient chunk-fetch failures can be retried instead of poisoning all later game launches for the current app session.
+- The all-games E2E setup wait now allows up to 15 seconds for a cold deferred chunk and reports any visible app toast or Suspense fallback when setup does not appear.
+- No game rules, content generation, player validation, or setup timing after the lazy chunks are ready were changed.
+
+
+## 2026-11-09 — Lazy arcade-controller readiness and game-scoped moderation
+
+- Added reusable importers for the seven lazy Party Arcade controller families. The selected controller is preloaded on card pointer/focus and awaited during the home-to-setup launch, so the player configures the game while its actual controller chunk is already warm.
+- Added a controller-ready marker to the real `PartyStage` UI. The all-games E2E sweep and focused Fake It, Would You Rather, and Who Am I journeys now wait for the real controller; the generic `Preparing your game…` Suspense placeholder can no longer satisfy the smoke test.
+- Removed the eager whole-catalogue moderation scan. Game startup checks moderation IDs only for the selected game's content, avoiding unrelated sequential 300-ID batches before a local game can begin.
+- Bounded the entire optional moderation-status lookup to 2.5 seconds across all of its batches; on timeout the existing unavailable-status path continues with local eligibility rules. Resumed sessions separately check only their active game's content.
+- Gameplay rules, player constraints, scoring, and content selection semantics are unchanged. Native Bun/Playwright execution remains pending on the pinned development workstation.
+
+## 2026-11-09 — Release-contract audit alignment for lazy arcade and startup boundaries
+
+- Corrected three brittle release-contract assertions to match the actual implementation: named dynamic-import loader functions wrapped by `React.lazy`, game-specific pointer/focus preload callbacks, and the selected-game `contentIds` variable passed to the bounded moderation lookup.
+- No production behavior was changed by this correction; the audited implementation already met the intended lazy-loading, preload, selected-game moderation, and timeout requirements.
+- `node scripts/check-release-contracts.mjs`: 192/192 checks passed.
+- `node scripts/check-build-budget.mjs`: existing `frontend/dist` artifact passed the current gzip/precache/chunk budget gate. A fresh Vite build and Bun quality pipeline still require the pinned Bun workspace environment.
+
+
+
+## 2026-11-09 — Party Arcade preload boundary and release-test alignment
+
+- Moved the seven dynamic controller importers, game-to-family mapping, and preload function into `frontend/src/games/party-controller-loaders.ts`. `PartyArcadeGame.tsx` now exports only the React game component, removing the React Fast Refresh `only-export-components` warning reported by the user.
+- Both home-intent preload and committed game launch now import the small loader module directly; they no longer need to import the React component module merely to access its preload helper.
+- Kept the seven game-family chunks independently lazy and retained the existing build-budget asset patterns.
+- Updated the Bun release-contract tests to assert the actual game-specific pointer/focus callback, elapsed-budget AbortSignal calculation, helper-module split, and `React.lazy` wrappers rather than brittle source-shape assumptions.
+- Added unit coverage for all 23 added-game-to-controller mappings and verified the four original games do not trigger Party Arcade preloading.
+- Static release-contract audit passes 193 checks. The exact Bun lint/typecheck/unit/Playwright pipeline remains to be rerun with the pinned workspace toolchain.

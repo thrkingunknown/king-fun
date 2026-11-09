@@ -7,6 +7,7 @@ type HomePageProps = {
   save: Save
   games: GameDefinition[]
   launchGame: Game | null
+  onPreloadContent: (game?: Game) => void
   onResume: () => void
   onLaunch: (game: Game, card: HTMLElement) => void
 }
@@ -41,7 +42,7 @@ const GAME_DETAILS: Record<Game, { index: string; label: string; metric: string 
   'reverse-singing': { index: '27', label: 'Audio challenge', metric: 'Mic optional' },
 }
 
-export default function HomePage({ save, games, launchGame, onResume, onLaunch }: HomePageProps) {
+export default function HomePage({ save, games, launchGame, onPreloadContent, onResume, onLaunch }: HomePageProps) {
   const firstGame = games[0] ?? GAMES[0]!
 
   return <div className="home-page">
@@ -54,6 +55,8 @@ export default function HomePage({ save, games, launchGame, onResume, onLaunch }
             <button
               type="button"
               className="kf-btn kf-btn-primary kf-btn-lg hero-primary-action"
+              onPointerEnter={() => onPreloadContent(firstGame.id)}
+              onFocus={() => onPreloadContent(firstGame.id)}
               onClick={event => onLaunch(firstGame.id, event.currentTarget)}
             ><Icon name="play" size={17} /> Start a game <Icon name="arrow-up-right" size={16} /></button>
           </div>
@@ -84,6 +87,8 @@ export default function HomePage({ save, games, launchGame, onResume, onLaunch }
             className={`game-card game-card-v2 ${game.color}${launchGame === game.id ? ' launching' : ''} kf-span-3`}
             key={game.id}
             type="button"
+            onPointerEnter={() => onPreloadContent(game.id)}
+            onFocus={() => onPreloadContent(game.id)}
             onClick={event => onLaunch(game.id, event.currentTarget)}
             style={{ animationDelay: `${index * 45}ms` }}
           >

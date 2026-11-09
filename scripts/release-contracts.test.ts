@@ -36,21 +36,21 @@ describe('Phase 6 release hardening contracts', () => {
     expect(schemaTests).toContain('strips it before provider routing')
   })
 
-  test('Cloudflare task-aware output budgets remain isolated to Workers AI and leave GPT-OSS reasoning room', () => {
+  test('Cloudflare Imposter uses a JSON-mode-capable model while other games retain GPT-OSS', () => {
     const adapter = read('backend/providers/generate.ts')
     const providerTests = read('backend/tests/providers.test.ts')
-    expect(adapter).toContain("GPT-OSS is a reasoning model and Cloudflare's max_tokens is the complete")
-    expect(adapter).toContain('return configuredLimit')
-    expect(adapter).toContain('GPT-OSS is a reasoning model')
-    expect(adapter).toContain('put the answer in text and exactly 20 distinct, indirect hints in hints')
-    expect(adapter).not.toContain('Do not generate any other content besides the hints')
+    const aiService = read('frontend/src/services/ai-providers.ts')
+    expect(adapter).toContain("'@cf/meta/llama-3.3-70b-instruct-fp8-fast'")
+    expect(adapter).toContain("type: 'json_schema', json_schema: responseSchemaFor(input)")
+    expect(adapter).toContain('minItems: 20, maxItems: 20')
+    expect(adapter).toContain('return 2048')
+    expect(adapter).toContain("env.CLOUDFLARE_AI_MODEL || '@cf/openai/gpt-oss-20b'")
     expect(providerTests).toContain('Cloudflare bounds GuessUp charade and five-item party-prompt output')
-    expect(providerTests).toContain('Cloudflare retains the generic token budget for longer Truth prompts')
     expect(providerTests).toContain('Cloudflare output truncation reports the server-side token-budget cause')
-    expect(adapter).toContain("choice.finish_reason === 'length'")
-    expect(providerTests).toContain('max_tokens).toBe(6_000)')
-    expect(providerTests).toContain('generationConfig?.maxOutputTokens).toBe(4_000)')
-    expect(providerTests).toContain('max_completion_tokens).toBe(4_000)')
+    expect(providerTests).toContain('Cloudflare retains the generic token budget for longer Truth prompts')
+    expect(aiService).toContain("game: 'imposter'")
+    expect(aiService).toContain("itemKind: 'word'")
+    expect(aiService).toContain("categoryDescription: 'Recognizable animals with clear habitats, behaviours and traits.'")
   })
 
   test('Imposter role-reveal E2E waits for the deferred catalogue and derives category metadata from the selected UI choice', () => {
@@ -72,6 +72,24 @@ describe('Phase 6 release hardening contracts', () => {
     expect(audit).toContain("browserSpec.includes('expect(startupHistory).toMatch(/Content ready from/)')")
   })
 
+  test('added-game controllers preload before play and startup moderation checks are game-scoped', () => {
+    const shell = read('frontend/src/AppShell.tsx')
+    const arcade = read('frontend/src/games/PartyArcadeGame.tsx')
+    const loaders = read('frontend/src/games/party-controller-loaders.ts')
+    const browser = read('frontend/e2e/ui.spec.ts')
+    const moderation = read('frontend/src/services/creator-access.ts')
+    expect(shell).toContain('gameContentSource = [...loadedSeed.content, ...customItems].filter(item => item.gameId === game)')
+    expect(shell).toContain("import('./games/party-controller-loaders.ts')")
+    expect(shell).not.toContain('loadBlockedContentIds(contentItems.map(item => item.id))')
+    expect(moderation).toContain('const CONTENT_STATUS_TIMEOUT_MS = 2_500')
+    expect(moderation).toContain('const remainingMs = CONTENT_STATUS_TIMEOUT_MS - (Date.now() - startedAt)')
+    expect(moderation).toContain('signal: AbortSignal.timeout(remainingMs)')
+    expect(loaders).toContain('export async function preloadPartyArcadeController')
+    expect(arcade).toContain('getPartyArcadeControllerFamily(active.game)')
+    expect(read('frontend/src/games/party/PartyGameUI.tsx')).toContain('data-testid="party-controller-ready"')
+    expect(browser).toContain("getByTestId('party-controller-ready')")
+  })
+
   test('latest lint, seeded-content, and all-games E2E regressions stay fixed', () => {
     const ambient = read('frontend/src/components/ui/AmbientBackground.tsx')
     const canonical = read('frontend/src/domain/content/canonicalize.test.ts')
@@ -90,7 +108,14 @@ describe('Phase 6 release hardening contracts', () => {
     expect(canonical).toContain('item.gameId === gameId')
     expect(canonical).toContain('each game content pool')
     expect(validation).toContain('[...GAME_IDS].sort()')
-    expect(browser).toContain("await expect(page.locator('.setup-workspace')).toBeVisible({ timeout: 10_000 })")
+    expect(browser).toContain('toBeVisible({ timeout: 15_000 })')
+    expect(browser).toContain('App notification:')
+    expect(read('frontend/src/AppShell.tsx')).toContain('seedContentPromiseRef.current === pending')
+    expect(read('frontend/src/AppShell.tsx')).toContain("import('./screens/SetupScreen.tsx')")
+    const home = read('frontend/src/App.tsx')
+    expect(home).toContain('onPointerEnter={() => onPreloadContent(game.id)}')
+    expect(home).toContain('onFocus={() => onPreloadContent(game.id)}')
+    expect(home).toContain('onPointerEnter={() => onPreloadContent(firstGame.id)}')
     expect(browser).toContain('await expect(chips.first()).toBeVisible({ timeout: 10_000 })')
     expect(browser.indexOf('await expect(chips.first())')).toBeLessThan(browser.indexOf('let count = await chips.count()'))
   })
@@ -480,12 +505,20 @@ describe('Phase 6 release hardening contracts', () => {
 
   test('the expanded party arcade loads only the selected controller family', () => {
     const router = read('frontend/src/games/PartyArcadeGame.tsx')
+    const loaders = read('frontend/src/games/party-controller-loaders.ts')
     const budget = read('scripts/check-build-budget.mjs')
-    for (const name of ['SocialDeductionGame', 'PromptArcadeGame', 'HotBombGame', 'TiltItGame', 'Challenge20Game', 'WordArcadeGame', 'ReverseSingingGame']) {
-      expect(router).toContain(`import('./party/${name}.tsx')`)
+    const names = [
+      ['SocialDeductionGame', 'loadSocialDeduction'], ['PromptArcadeGame', 'loadPromptArcade'],
+      ['HotBombGame', 'loadHotBomb'], ['TiltItGame', 'loadTiltIt'],
+      ['Challenge20Game', 'loadChallenge20'], ['WordArcadeGame', 'loadWordArcade'],
+      ['ReverseSingingGame', 'loadReverseSinging'],
+    ]
+    for (const [name, loader] of names) {
+      expect(loaders).toContain(`export const ${loader} = () => import('./party/${name}.tsx')`)
+      expect(router).toContain(`lazy(() => ${loader}().then(module => ({ default: module.${name} })))`)
       expect(budget).toContain(`${name}-[^/]+`)
     }
-    expect((router.match(/lazy\(\(\) => import\(/g) ?? []).length).toBe(7)
+    expect((router.match(/lazy\(\(\) => load[A-Za-z0-9]+\(\)\.then/g) ?? []).length).toBe(7)
   })
 
   test('interactive 3D ambient background stays lightweight, accessible and motion-safe', () => {

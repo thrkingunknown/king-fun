@@ -864,3 +864,36 @@ The service-worker shell cache is now `king-fun-shell-v8` because the applicatio
 - No smaller per-game completion caps are applied to GPT-OSS, because the configured completion budget must cover reasoning and final JSON.
 - The provider-specific truncation message includes the exact `max_tokens` sent, so a deployed screenshot can identify the backend revision/budget.
 - Regression tests cover the 6,000 Imposter budget, 4,000 five-item batches, global override, actionable truncation message, and partial JSON with `finish_reason: length`.
+
+
+## Cloudflare Imposter model/structured-output regression (2026-11-09)
+
+- Test that a Cloudflare Imposter word request overrides the ordinary GPT-OSS model selection with `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, sends JSON Schema mode, bounds the top-level item array to one, and bounds its hints array to exactly twenty.
+- Test that ordinary Cloudflare requests still use the configured/default GPT-OSS model and JSON-object mode.
+- Test that Cloudflare's Settings generation probe sends the same Imposter one-word/twenty-hint request used by game startup, with built-in Animals metadata, and bypasses the content vault as a live provider test.
+- Retain server-side validation for exact hint count, uniqueness, answer safety, audience suitability, and generated content structure.
+
+
+### Lazy game setup transition retry (2026-11-09)
+
+- Hover/focus a home game card before clicking; the deferred seed catalogue and SetupScreen chunk should preload without opening setup.
+- If the seed chunk rejects, a subsequent launch retries the dynamic import rather than reusing a permanently rejected promise.
+- Clicking any game provides immediate launch feedback, resolves the seed and setup chunks, and transitions to the selected game's setup screen.
+- If setup does not mount, the 23-game E2E sweep reports the visible app toast and Suspense fallback in its failure message.
+
+## 2026-11-09 — Release-contract source-shape correction
+
+- Updated release contracts to assert the seven real arcade loader functions and their lazy wrappers instead of requiring inline `lazy(() => import(...))` syntax.
+- Updated the setup preload assertion to match the actual game-specific pointer-enter and focus callbacks.
+- Updated the moderation startup assertion to follow `gameContentSource` into the `contentIds` variable and then into `loadBlockedContentIds`, while retaining checks for the 2.5-second abort budget.
+- The assertions remain behavior-oriented: seven independent demand-loaded families, selected-game-only moderation IDs, bounded optional lookup, and preloaded setup.
+
+
+
+## Party Arcade controller loader regressions (2026-11-09)
+
+- **TEST-ARCADE-LOAD-001:** Every one of the 23 added games maps to exactly one of the seven lazy controller families.
+- **TEST-ARCADE-LOAD-002:** The four original games return no Party Arcade family and do not trigger Party Arcade chunk preloading.
+- **TEST-ARCADE-LOAD-003:** Home pointer and keyboard focus preload the selected game's setup/controller; committing launch awaits the same loader module before entering setup.
+- **TEST-ARCADE-LOAD-004:** The React component module exports only `PartyArcadeGame`; non-component loader functions live in `party-controller-loaders.ts` to keep Fast Refresh lint clean.
+- **TEST-ARCADE-LOAD-005:** Release-contract checks follow the actual `remainingMs` timeout passed to `AbortSignal.timeout`, rather than requiring the constant itself as the timeout argument.

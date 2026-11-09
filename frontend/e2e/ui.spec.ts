@@ -46,7 +46,14 @@ test.describe('KING-FUN responsive experience', () => {
       await page.goto('/')
       const gameCard = page.locator('.game-card-v2').filter({ has: page.getByRole('heading', { name: game.name, exact: true }) })
       await gameCard.click()
-      await expect(page.locator('.setup-workspace')).toBeVisible({ timeout: 10_000 })
+      const setupWorkspace = page.locator('.setup-workspace')
+      try {
+        await expect(setupWorkspace, `${game.name} should open setup after its deferred content and screen chunks load`).toBeVisible({ timeout: 15_000 })
+      } catch (error) {
+        const toast = await page.locator('.kf-toast').textContent().catch(() => null)
+        const fallback = await page.locator('.screen-loading').textContent().catch(() => null)
+        throw new Error(`${game.name} setup did not appear. App notification: ${toast?.trim() || 'none'}; screen fallback: ${fallback?.trim() || 'none'}. ${error instanceof Error ? error.message : String(error)}`)
+      }
       const chips = page.locator('.player-chip-editable')
       // The setup screen is intentionally delayed for the home-to-setup
       // transition. Wait for the persisted roster before taking an immediate
@@ -76,7 +83,10 @@ test.describe('KING-FUN responsive experience', () => {
         await expect(loadingOverlay).not.toContainText(/Generating with (Gemini|Groq|Cloudflare)/)
       }
       await expect(page.locator('.party-stage')).toBeVisible({ timeout: 8_000 })
-      await expect(page.locator('.party-stage h1, .party-stage h2').first()).toBeVisible()
+      // A Suspense fallback also contains a .party-stage heading. Require the
+      // marker rendered inside the resolved lazy controller to prove it loaded.
+      await expect(page.getByTestId('party-controller-ready')).toBeVisible({ timeout: 10_000 })
+      await expect(page.locator('[data-testid="party-controller-ready"] h1, [data-testid="party-controller-ready"] h2').first()).toBeVisible()
     }
   })
 
@@ -118,7 +128,8 @@ test.describe('KING-FUN responsive experience', () => {
     await page.goto('/')
     await page.getByRole('button', { name: /Fake It/ }).click()
     await page.getByRole('button', { name: /^Start game/i }).click()
-    await expect(page.getByRole('heading', { name: /pass the device to/i })).toBeVisible()
+    await expect(page.getByTestId('party-controller-ready')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('heading', { name: /pass the device to/i })).toBeVisible({ timeout: 10_000 })
     await page.getByRole('button', { name: 'Reveal secret word' }).click()
     await expect(page.locator('.identity-card')).toBeVisible()
     await page.getByRole('button', { name: /hide word.*start questions/i }).click()
@@ -132,7 +143,8 @@ test.describe('KING-FUN responsive experience', () => {
     await page.goto('/')
     await page.getByRole('button', { name: /Would You Rather/i }).click()
     await page.getByRole('button', { name: /^Start game/i }).click()
-    await expect(page.getByRole('heading', { name: /your preference/i })).toBeVisible()
+    await expect(page.getByTestId('party-controller-ready')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('heading', { name: /your preference/i })).toBeVisible({ timeout: 10_000 })
     const firstPrompt = await page.locator('.party-stage-heading p').textContent()
     const voterLabel = await page.locator('.party-progress-note').textContent()
     const voterCount = Number(voterLabel?.match(/OF\s+(\d+)/i)?.[1] ?? 0)
@@ -193,7 +205,8 @@ test.describe('KING-FUN responsive experience', () => {
     await page.goto('/')
     await page.getByRole('button', { name: /Who Am I/i }).click()
     await page.getByRole('button', { name: /^Start game/i }).click()
-    await expect(page.getByRole('heading', { name: /who are you/i })).toBeVisible()
+    await expect(page.getByTestId('party-controller-ready')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('heading', { name: /who are you/i })).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText(/show this identity to the group/i)).toBeVisible()
     await expect(page.getByRole('button', { name: /they guessed it/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /pass identity/i })).toBeVisible()

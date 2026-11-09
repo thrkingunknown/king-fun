@@ -118,21 +118,32 @@ export type ContentStatusProgress = {
   detail?: string
 }
 
+const CONTENT_STATUS_TIMEOUT_MS = 2_500
+
 export async function loadBlockedContentIds(
   ids: readonly string[],
   onProgress?: (event: ContentStatusProgress) => void,
 ): Promise<string[]> {
   const blocked = new Set<string>()
+  const startedAt = Date.now()
   const totalBatches = Math.ceil(ids.length / 300)
   let checkedItems = 0
   for (let offset = 0; offset < ids.length; offset += 300) {
     const batch = Math.floor(offset / 300) + 1
     const batchIds = ids.slice(offset, offset + 300)
+    const remainingMs = CONTENT_STATUS_TIMEOUT_MS - (Date.now() - startedAt)
+    if (remainingMs <= 0) {
+      onProgress?.({ stage: 'unavailable', batch, totalBatches, checkedItems, totalItems: ids.length, detail: 'The moderation-status time budget elapsed; local eligibility rules will continue.' })
+      break
+    }
     onProgress?.({ stage: 'checking', batch, totalBatches, checkedItems, totalItems: ids.length })
     try {
       const response = await apiFetch(`${getAiApiBase()}/v1/content/status`, {
         method: 'POST', cache: 'no-store', headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify({ ids: batchIds }),
+        // This optional moderation lookup must never hold a local game start
+        // indefinitely. The existing catch path continues with local rules.
+        signal: AbortSignal.timeout(remainingMs),
       })
       if (!response.ok) {
         onProgress?.({ stage: 'unavailable', batch, totalBatches, checkedItems, totalItems: ids.length, detail: `The backend content-status request returned HTTP ${response.status}; local eligibility checks will continue.` })

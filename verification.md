@@ -1499,3 +1499,63 @@ Run `bun install --frozen-lockfile`, `bun run check`, and `bun run test:e2e` on 
 - Rewrote the partial JSON fixture as a template literal, eliminating quote-escape warnings.
 - Verified the provider adapter by invoking it with a mocked Cloudflare `finish_reason: 'length'` response under Node's TypeScript stripping: the thrown `SafeProviderError` is `INVALID_RESPONSE` and its message exactly matches the regression expectation, including `6,000` and the sentence separator.
 - Native Bun/Oxlint and the full test suite still need to be rerun on the user's Windows workspace; Bun is not installed in this authoring runtime.
+
+
+## 2026-11-09 — Cloudflare Imposter structured-output root-cause correction
+
+- User evidence: Cloudflare Settings connection test returned a response, GuessUp generation succeeded, while Imposter game startup failed. Code inspection confirmed the Settings provider test always used a simple Truth prompt (`truth-or-dare`, `itemKind: truth`, one item, empty hints); it did not test Imposter's required 20-hint contract. GuessUp charades also do not require the 20-hint metadata array.
+- Cloudflare's published JSON Mode support matrix lists `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, but does not list the default `@cf/openai/gpt-oss-20b`. GPT-OSS remains the ordinary Cloudflare model; only Imposter is now routed to the documented JSON-mode-capable Llama model. Sources: https://developers.cloudflare.com/workers-ai/features/json-mode/ and https://developers.cloudflare.com/workers-ai/models/llama-3.3-70b-instruct-fp8-fast/.
+- Imposter sends `response_format: json_schema` with array count bounds (one result, twenty hints), a 2,048-token budget, and deterministic low-temperature output. GPT-OSS reasoning parameters are not sent to the Llama route. The application still independently enforces 20 unique indirect 1–2 word hints and answer-safety checks.
+- The Cloudflare Settings connection test now runs this same Imposter schema and bypasses the vault, rather than a generic one-line Truth request.
+- Local Bun is unavailable in this authoring runtime. Source edits and regression assertions are prepared; provider tests, typecheck, lint, full Bun check and a live deployed Imposter generation must be run on the user's environment before claiming runtime success. This change does not alter Gemini, Groq, other Cloudflare game models, gameplay, player state, or Android configuration.
+
+
+## 2026-11-09 — Arcade controller startup/E2E correction
+
+- Reviewed the supplied Playwright output: the all-games smoke loop passed because it accepted `.party-stage h1` from the `role=status` Suspense fallback (`Preparing your game…`), while focused Fake It, Would You Rather, and Who Am I tests failed to find their real controller headings.
+- Source correction: the selected Party Arcade controller family is preloaded on card pointer/focus and awaited as part of the launch transition. A `party-controller-ready` marker exists on the actual shared `PartyStage` root only after its lazy controller has resolved. The smoke loop and focused interaction tests assert that marker.
+- Startup moderation lookup now requests IDs belonging only to the selected game; the eager whole-catalogue scan and duplicate unrelated batch work were removed. The total optional status lookup is bounded to 2.5 seconds across all batches and retains the existing local-play fallback on failure. Resumed sessions check only the active game's content.
+- No Bun executable or workspace dependencies are installed in this authoring runtime. Static source checks can be performed here, but native lint, typecheck, Bun tests, and Playwright must be rerun with the pinned Bun 1.4.4 toolchain using `bun run check` and `bun run test:e2e` before runtime verification is signed off.
+
+## 2026-11-09 — User-reported release-contract failure: three stale assertions
+
+### User-provided failure
+- `bun run check` stopped at `check:release-contracts` with three failures: seven lazy arcade families, delayed setup/preload E2E, and selected-game moderation with a bounded status request.
+
+### Cause and correction
+- All three failures were caused by source-shape assumptions in the audit, not missing features. The router defines seven named `load*()` dynamic imports and passes them to `React.lazy`; the home page supplies game-specific pointer/focus lambdas; and startup filters the selected game's items into `gameContentSource`, maps that to `contentIds`, then passes those IDs to the bounded status lookup.
+- Updated only the release-contract assertions to verify those real paths. No production game/runtime code was changed.
+
+### Verification performed in this environment
+- `node scripts/check-release-contracts.mjs`: **192/192 passed**.
+- `node scripts/check-build-budget.mjs`: **passed against the archive's existing `frontend/dist` artifact** (this is not a fresh build).
+- Bun 1.4.4, workspace `node_modules`, Oxlint, and Playwright are not installed in this environment, and network DNS prevents installing them. Therefore full `bun run check` and `bun run test:e2e` were not executable here. The user's machine must rerun those exact gates after extracting the updated archive.
+
+
+
+## 2026-11-09 — Current uploaded archive: Party Arcade lint and test repair
+
+### User-provided run
+- Frontend lint: 0 errors, 1 React Fast Refresh warning because `PartyArcadeGame.tsx` also exported a preloader utility.
+- Backend lint: 0 warnings, 0 errors.
+- Frontend and backend TypeScript workspace typechecks: passed.
+- Unit tests: 249 passed, 3 failed. The failures were source-shape assertions: a constant timeout was expected instead of `AbortSignal.timeout(remainingMs)`; direct home preload function props were expected instead of the game-specific pointer/focus lambdas; and direct inline imports were expected instead of named dynamic import functions passed to `React.lazy`.
+
+### Corrections in this archive
+- Extracted Party Arcade loader functions and family mapping to `frontend/src/games/party-controller-loaders.ts`; both preload call sites import the helper directly. The React component module now exports only the component, addressing the reported Fast Refresh warning without changing runtime gameplay.
+- Updated the three stale release-contract assertions to validate the real runtime paths and retained assertions for the 2.5-second total moderation-status budget and all seven independent lazy chunks.
+- Added explicit unit tests for the 23 game-to-family mappings and no-op preloading for the four original games.
+
+### Checks actually performed here
+- `node scripts/check-release-contracts.mjs`: **193/193 passed**.
+- `node scripts/check-build-budget.mjs`: **passed against the archive's existing `frontend/dist` artifact**. This is an artifact audit, not a fresh Vite build of the modified TypeScript source.
+- Bun 1.4.4 and workspace dependencies are not installed in this editing environment; native Oxlint, workspace TypeScript, Bun tests, security audit, fresh Vite build and Playwright remain unrun here. Do not treat this as a complete `bun run check` sign-off.
+
+
+### Follow-up verification after the loader extraction
+- `node scripts/check-release-contracts.mjs`: **193/193 passed** after aligning the static source audit with the extracted loader module.
+- `node scripts/check-build-budget.mjs`: **passed** for the archive's existing production assets, including the entry, deferred app shell, original game chunks, and seven arcade chunk patterns.
+- TypeScript compiler `transpileModule` syntax pass: **121 `.ts`/`.tsx` source files, zero syntax diagnostics**. This is syntax-only and does not replace the TypeScript 7 workspace typechecks.
+- Executed the extracted family resolver under Node after TypeScript transpilation: **23/23 added games map to the intended seven families**, and all four original games resolve to `null` and perform no Party Arcade import.
+- The user-provided log already showed both workspace typechecks passed before these changes and 249/252 Bun tests passed, with only the three release-contract source-shape assertions failing. Those Bun checks have not been rerun on this edited archive because Bun and workspace dependencies are not installed here.
+- No fresh Oxlint run, Bun unit-test run, `bun audit`, Vite build, or Playwright run is claimed for this edited archive.

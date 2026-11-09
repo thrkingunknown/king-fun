@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 export function PartyStage({ eyebrow, title, subtitle, children, className = '' }: {
   eyebrow: string; title: string; subtitle?: string; children: ReactNode; className?: string
 }) {
-  return <div className={`party-stage ${className}`}>
+  return <div className={`party-stage ${className}`} data-testid="party-controller-ready">
     <div className="party-stage-heading"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div>
     <div className="party-stage-content">{children}</div>
   </div>

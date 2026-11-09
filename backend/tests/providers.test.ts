@@ -80,17 +80,27 @@ describe('provider adapters', () => {
       AI_ENABLED: 'true',
       CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32),
       CLOUDFLARE_API_TOKEN: 'c'.repeat(32),
+      CLOUDFLARE_AI_MODEL: '@cf/openai/gpt-oss-20b',
     })
     expect(capturedBody?.options).toEqual({ rejectIfBusy: true })
-    expect(capturedBody?.reasoning_effort).toBe('low')
-    expect(capturedBody?.max_tokens).toBe(6_000)
+    expect(capturedBody?.model).toBe('@cf/meta/llama-3.3-70b-instruct-fp8-fast')
+    expect(capturedBody?.reasoning_effort).toBeUndefined()
+    expect(capturedBody?.temperature).toBe(0.2)
+    expect(capturedBody?.max_tokens).toBe(2_048)
     const messages = capturedBody?.messages as Array<{ role: string; content: string }>
     const prompt = messages.map(message => message.content).join('\n')
     expect(prompt).toContain('put the answer in text')
     expect(prompt).toContain('exactly 20 distinct, indirect hints')
     expect(prompt).not.toContain('Do not generate any other content besides the hints')
-    const responseFormat = capturedBody?.response_format as { type?: string }
-    expect(responseFormat.type).toBe('json_object')
+    const responseFormat = capturedBody?.response_format as {
+      type?: string
+      json_schema?: { properties?: { items?: { minItems?: number; maxItems?: number; items?: { properties?: { hints?: { minItems?: number; maxItems?: number } } } } } }
+    }
+    expect(responseFormat.type).toBe('json_schema')
+    expect(responseFormat.json_schema?.properties?.items?.minItems).toBe(1)
+    expect(responseFormat.json_schema?.properties?.items?.maxItems).toBe(1)
+    expect(responseFormat.json_schema?.properties?.items?.items?.properties?.hints?.minItems).toBe(20)
+    expect(responseFormat.json_schema?.properties?.items?.items?.properties?.hints?.maxItems).toBe(20)
   })
 
   test('Cloudflare output truncation reports the server-side token-budget cause', async () => {
@@ -110,7 +120,7 @@ describe('provider adapters', () => {
       CLOUDFLARE_API_TOKEN: 'c'.repeat(32),
     })).rejects.toMatchObject({
       code: 'INVALID_RESPONSE',
-      message: 'Cloudflare Workers AI stopped at the 6,000-token completion budget before returning the complete JSON response. The backend uses fixed task-aware budgets; verify the deployed build and configured model, then retry.',
+      message: 'Cloudflare Workers AI stopped at the 2,048-token completion budget before returning the complete JSON response. The backend uses fixed task-aware budgets; verify the deployed build and configured model, then retry.',
     })
   })
 
@@ -131,6 +141,8 @@ describe('provider adapters', () => {
         return Response.json({ choices: [{ message: { content: JSON.stringify({ items }) } }] })
       }) as typeof fetch
       await generateWithProvider('cloudflare-workers-ai', scenario.request, env)
+      expect(capturedBody?.model).toBe('@cf/openai/gpt-oss-20b')
+      expect(capturedBody?.response_format).toEqual({ type: 'json_object' })
       expect(capturedBody?.max_tokens).toBe(scenario.expected)
     }
   })

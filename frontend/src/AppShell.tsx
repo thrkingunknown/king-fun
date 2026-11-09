@@ -115,6 +115,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
   const [customItems, setCustomItems] = useState<ContentItem[]>([])
   const [seedContent, setSeedContent] = useState<LoadedSeedContent | null>(null)
   const seedContentPromiseRef = useRef<Promise<SeedContentModule> | null>(null)
+  const launchSequenceRef = useRef(0)
   const guessUpRulesPromiseRef = useRef<Promise<typeof import('./domain/games/guessup.ts')> | null>(null)
   const revisionRef = useRef(initialRevision)
   const writeQueueRef = useRef<Promise<void>>(Promise.resolve())
@@ -229,21 +230,51 @@ export default function AppShell({ initialState, initialRevision, initialPersist
 
   const ensureSeedContent = async (): Promise<LoadedSeedContent> => {
     if (seedContent) return seedContent
-    const module = await (seedContentPromiseRef.current ??= import('./content/seed.ts'))
-    const loaded = { content: module.SEEDED_CONTENT, packs: module.SEEDED_PACKS }
-    setSeedContent(loaded)
-    return loaded
+    const pending = seedContentPromiseRef.current ?? import('./content/seed.ts')
+    seedContentPromiseRef.current = pending
+    try {
+      const module = await pending
+      const loaded = { content: module.SEEDED_CONTENT, packs: module.SEEDED_PACKS }
+      setSeedContent(loaded)
+      return loaded
+    } catch (error) {
+      // A failed lazy chunk fetch must not poison the module-level promise for
+      // the rest of this app session. A later click can retry the import.
+      if (seedContentPromiseRef.current === pending) seedContentPromiseRef.current = null
+      throw error
+    }
+  }
+  const preloadGameSetup = (game?: Game) => {
+    // Pointer/focus intent gives local content, setup, and the selected game
+    // controller a head start before the player commits to opening a game.
+    void ensureSeedContent().catch(() => undefined)
+    void import('./screens/SetupScreen.tsx').catch(() => undefined)
+    if (game && !['imposter', 'guessup', 'truth-or-dare', 'never-have-i-ever'].includes(game)) {
+      void import('./games/party-controller-loaders.ts')
+        .then(module => module.preloadPartyArcadeController(game))
+        .catch(() => undefined)
+    }
   }
   const loadGuessUpRules = () => (guessUpRulesPromiseRef.current ??= import('./domain/games/guessup.ts'))
   const contentItems = useMemo(() => [...(seedContent?.content ?? []), ...customItems], [seedContent, customItems])
   const contentPacks = useMemo(() => [...(seedContent?.packs ?? []), ...customPacks], [seedContent, customPacks])
 
+  // Resumed sessions do not pass through startGame. Recheck only their own
+  // game's moderation IDs, preserving the resume safety check without a
+  // whole-catalogue scan on every app load.
   useEffect(() => {
-    if (!contentItems.length) return
-    const state = { cancelled: false }
-    void loadBlockedContentIds(contentItems.map(item => item.id)).then(ids => { if (!state.cancelled) { const merged = new Set([...blockedContentIdsRef.current, ...ids]); blockedContentIdsRef.current = merged; setBlockedContentIds(merged) } })
-    return () => { state.cancelled = true }
-  }, [contentItems])
+    const resumedGame = save.active?.game
+    if (!resumedGame || !contentItems.length || startPendingRef.current) return
+    const ids = contentItems.filter(item => item.gameId === resumedGame).map(item => item.id)
+    let cancelled = false
+    void loadBlockedContentIds(ids).then(blocked => {
+      if (cancelled) return
+      const merged = new Set([...blockedContentIdsRef.current, ...blocked])
+      blockedContentIdsRef.current = merged
+      setBlockedContentIds(merged)
+    })
+    return () => { cancelled = true }
+  }, [contentItems, save.active?.game])
 
   useEffect(() => {
     const onQuarantined = (event: Event) => {
@@ -414,18 +445,32 @@ export default function AppShell({ initialState, initialRevision, initialPersist
   }
 
   const launchGame = async (game: Game, card: HTMLElement) => {
-    try {
-      await ensureSeedContent()
-    } catch {
-      setToast('The bundled content could not be loaded. Reload and try again.')
-
-      return
-    }
+    const requestId = ++launchSequenceRef.current
     const icon = card.querySelector('.card-icon')
     const bounds = icon?.getBoundingClientRect() ?? card.getBoundingClientRect()
+    // Give immediate feedback while the deferred seed/setup/controller chunks resolve.
     setLaunch({ game, x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 })
+    try {
+      const preloadTasks: Promise<unknown>[] = [ensureSeedContent(), import('./screens/SetupScreen.tsx')]
+      if (!['imposter', 'guessup', 'truth-or-dare', 'never-have-i-ever'].includes(game)) {
+        preloadTasks.push(import('./games/party-controller-loaders.ts').then(module => module.preloadPartyArcadeController(game)))
+      }
+      await Promise.all(preloadTasks)
+    } catch {
+      if (requestId === launchSequenceRef.current) {
+        setLaunch(null)
+        setToast('The game setup could not be loaded. Check your connection and try again.')
+      }
+      return
+    }
+    if (requestId !== launchSequenceRef.current) return
     const reducedMotion = save.motionPreference === 'reduce' || (save.motionPreference === 'system' && (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false))
-    window.setTimeout(() => { setSelected(game); setScreen('setup'); setLaunch(null) }, reducedMotion ? 30 : 420)
+    window.setTimeout(() => {
+      if (requestId !== launchSequenceRef.current) return
+      setSelected(game)
+      setScreen('setup')
+      setLaunch(null)
+    }, reducedMotion ? 30 : 420)
   }
 
   const selectContent = useCallback((game: Game, kind: string | undefined, packIds: readonly string[], seenIds: readonly string[] = [], recordRecent = true, playerName?: string): ContentItem | null => {
@@ -614,7 +659,10 @@ export default function AppShell({ initialState, initialRevision, initialPersist
       const loadedSeed = await ensureSeedContent()
       setGameLoadingEntry('local-catalogue', 'Local game data loaded', `${loadedSeed.packs.length} packs and ${loadedSeed.content.length} local content items are available.`, 'complete')
       setGameLoadingEntry('content-check', 'Applying local content rules', 'Evaluating the selected catalogue against local age-suitability rules.', 'active')
-      const contentIds = [...loadedSeed.content, ...customItems].map(item => item.id)
+      // Query moderation only for content this game can consume. Fetching the
+      // entire catalogue serializes unrelated 300-ID batches during startup.
+      const gameContentSource = [...loadedSeed.content, ...customItems].filter(item => item.gameId === game)
+      const contentIds = gameContentSource.map(item => item.id)
       const latestBlockedIds = await loadBlockedContentIds(contentIds, event => {
         if (event.stage === 'checking') {
           setGameLoadingEntry('backend-content-status', 'Fetching moderation status from the backend', `Checking batch ${event.batch} of ${event.totalBatches} (${event.totalItems} content IDs).`, 'active')
@@ -628,7 +676,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
       const mergedBlockedIds = new Set([...blockedContentIdsRef.current, ...latestBlockedIds])
       blockedContentIdsRef.current = mergedBlockedIds
       setBlockedContentIds(mergedBlockedIds)
-      const gameContentItems = [...loadedSeed.content, ...customItems].filter(item => contentAllowedForMode(item, save.adultMode) && !mergedBlockedIds.has(item.id))
+      const gameContentItems = gameContentSource.filter(item => contentAllowedForMode(item, save.adultMode) && !mergedBlockedIds.has(item.id))
       const gameContentPacks = [...loadedSeed.packs, ...customPacks]
       const requestedConfig = setup ?? lastSetupRef.current ?? makeDefaultSetup(game, save.players, gameContentPacks, save.guessUpPreferences ?? INITIAL_SAVE.guessUpPreferences!, save.imposterPreferences ?? INITIAL_SAVE.imposterPreferences!)
       // Normalize legacy or partial Imposter setup snapshots before they enter a round.
@@ -1557,7 +1605,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
 
     <main id="main-content" ref={mainContentRef} tabIndex={-1} aria-label="KING-FUN main content" className="main-shell">
       <div key={screen} className={`screen-transition${save.motionPreference === 'reduce' ? ' motion-reduced' : ''}`}>
-      {screen === 'home' && <HomePage save={save} games={GAMES} launchGame={homeLaunch} onResume={() => { if (save.active) { void ensureSeedContent().then(() => { setSelected(save.active!.game); setScreen('play') }).catch(() => setToast('Saved game content could not be loaded. Reload and try again.')) } }} onLaunch={launchGame} />}
+      {screen === 'home' && <HomePage save={save} games={GAMES} launchGame={homeLaunch} onPreloadContent={preloadGameSetup} onResume={() => { if (save.active) { void ensureSeedContent().then(() => { setSelected(save.active!.game); setScreen('play') }).catch(() => setToast('Saved game content could not be loaded. Reload and try again.')) } }} onLaunch={launchGame} />}
       {(screen === 'setup' || screen === 'history' || screen === 'settings' || screen === 'play') && <Suspense fallback={<div className="screen-loading" role="status">Loading screen…</div>}>
       {screen === 'setup' && <SetupScreen key={selected} game={GAMES.find(item => item.id === selected) ?? GAMES[0]!} adultMode={save.adultMode} players={save.players} packs={contentPacks} contentItems={contentItems} savedPackIds={save.selectedPackIdsByGame?.[selected] ?? []} imposterPreferences={save.imposterPreferences ?? INITIAL_SAVE.imposterPreferences!} guessUpPreferences={save.guessUpPreferences ?? INITIAL_SAVE.guessUpPreferences!} updateGuessUpPreferences={updateGuessUpPreferences} addPlayer={(rawName: string) => {
         const name = rawName.trim()
