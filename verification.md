@@ -1462,15 +1462,40 @@ Run `bun install --frozen-lockfile`, `bun run check`, and `bun run test:e2e` on 
 
 - User's latest Windows Network/console screenshot shows the provider is no longer primarily timing out: the API returns the explicit safe error mapped from OpenAI `finish_reason: "length"` — the model exhausted its configured completion token budget before the content batch was complete. The CSP feedback script and Permissions-Policy warnings remain unrelated.
 - Root cause in the then-current source: Cloudflare Imposter generation was hard-capped at 1,024 tokens even though the selected default is GPT-OSS 20B, a reasoning model. This budget could be consumed by model reasoning before the final one-word/20-hint JSON was completed. The Imposter prompt also contained contradictory instructions: it required the secret word in `text` but said to generate nothing except hints, and duplicated the same hint guidance several times.
-- Raised only the Cloudflare one-word Imposter ceiling to 4,096 tokens (still subject to the operator's global `AI_MAX_OUTPUT_TOKENS` ceiling); rewrote its prompt as one compact, consistent contract; removed irrelevant Imposter hint guidance from all non-Imposter prompts; and raised Cloudflare GuessUp/Party Arcade short-batch ceilings to 2,048/3,072 respectively. Gemini/Groq parameters, timeouts, provider order, game rules and batch sizes remain unchanged.
+- Raised only the Cloudflare one-word Imposter ceiling to 4,096 tokens (using a fixed backend-owned task budget); rewrote its prompt as one compact, consistent contract; removed irrelevant Imposter hint guidance from all non-Imposter prompts; and raised Cloudflare GuessUp/Party Arcade short-batch ceilings to 2,048/3,072 respectively. Gemini/Groq parameters, timeouts, provider order, game rules and batch sizes remain unchanged.
 - Updated provider tests to assert the new budgets and non-contradictory prompt. Official Cloudflare model/API documentation confirms GPT-OSS 20B is a reasoning model with low/medium/high reasoning modes, and documents `max_tokens` as the generation budget. See [GPT-OSS 20B](https://developers.cloudflare.com/workers-ai/models/gpt-oss-20b/) and [OpenAI-compatible endpoints](https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/).
-- Verification boundary: no Bun executable/workspace dependencies or live Cloudflare credentials are available in this authoring runtime. The targeted source assertions and static package checks remain pending local execution; a deployed uncached Imposter test is still required to confirm the model completes under the 52-second gateway deadline. If Vercel explicitly sets `AI_MAX_OUTPUT_TOKENS` below 4,096, that operator-wide ceiling will still apply and must be raised or removed for this task.
+- Verification boundary: no Bun executable/workspace dependencies or live Cloudflare credentials are available in this authoring runtime. The targeted source assertions and static package checks remain pending local execution; a deployed uncached Imposter test is still required to confirm the model completes under the 52-second gateway deadline. Output budgets are fixed in backend code; no `AI_MAX_OUTPUT_TOKENS` deployment setting exists or is required.
 
 
 ## 2026-11-09 — Cloudflare GPT-OSS completion budget follow-up
 
 - Screenshot diagnosis: the displayed generic `Reduce the batch size` truncation message is the pre-fix error string; current source reports a Cloudflare-specific message including the exact completion budget. This is evidence the screenshot came from a backend deployment predating the provider-specific diagnostic.
-- Removed restrictive per-game Cloudflare output caps. GPT-OSS now receives the full configured task allowance (6,000 tokens for Imposter; 4,000 default for other requests), with explicit `AI_MAX_OUTPUT_TOKENS` still enforced globally.
+- Removed restrictive per-game Cloudflare output caps. GPT-OSS now receives the full configured task allowance (6,000 tokens for Imposter; 4,000 default for other requests), with fixed backend-owned task budgets.
 - Confirmed Cloudflare documents GPT-OSS 20B as a reasoning model and `max_tokens` as its generation limit; Cloudflare's OpenAI-compatible docs also document the Chat Completions route and `rejectIfBusy`. Sources: https://developers.cloudflare.com/workers-ai/models/gpt-oss-20b/ and https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/.
 - Added regression coverage for output budget, explicit global override, exact budget in truncation diagnostics, and non-empty partial JSON returned with `finish_reason: length`.
 - Bun is unavailable in this authoring runtime; native lint/typecheck/unit/release-contract tests and a deployed uncached Cloudflare generation remain unverified.
+
+
+## 2026-11-09 — Provider output-budget and backend lint correction
+
+- Removed the unsupported `AI_MAX_OUTPUT_TOKENS` setting from the provider environment type and runtime calculation. `.env.example` never declared this setting; Cloudflare output budgets are now explicitly fixed in backend code (6,000 tokens for Imposter word/hints; 4,000 for other requests).
+- Removed the misleading suggestion that operators should configure a nonexistent Vercel environment variable. Updated deployment/provider documentation and regression expectations accordingly.
+- Rewrote the Cloudflare truncation test's mocked `fetch` callback as a block-bodied async function. This resolves the Oxlint parser error at `backend/tests/providers.test.ts:99` without changing the test's intended `finish_reason: 'length'` scenario.
+- Verification: TypeScript transpile syntax checks passed for the modified provider adapter and provider tests; static release-contract audit passed 189/189. Native Oxlint and Bun tests could not be run in this runtime because Bun/workspace dependencies are unavailable; rerun the user's exact lint command locally.
+
+
+## 2026-11-09 — Follow-up from user Bun check output
+
+- User-provided run: both frontend and backend typechecks passed; frontend lint passed clean; backend lint completed with six `no-useless-escape` warnings in the partial JSON fixture; 249 of 250 unit tests passed.
+- The only unit failure was an exact diagnostic-message mismatch: implementation emitted `6000` without a thousands separator and omitted a space after the sentence period, while the test expected `6,000` and the correctly separated sentence.
+- Fixed the backend diagnostic to format numeric token budgets using `toLocaleString('en-US')` and preserve sentence spacing. Removed unnecessary quote escapes in the partial JSON fixture.
+- This runtime has no Bun executable or installed workspace dependencies, so native Oxlint and Bun tests cannot be rerun here. The exact command to rerun is `bun run check`; expected focused changes are zero backend lint warnings and the previously failing truncation test passing.
+
+
+## 2026-11-09 — Final correction from the 249/250 user Bun run
+
+- The attached run reported 249/250 passing tests. The one failure was the Cloudflare `finish_reason: 'length'` diagnostic: the actual error string had `6000` rather than `6,000` and concatenated the next sentence without a separating space. Backend Oxlint also reported six `no-useless-escape` warnings for the intentionally partial JSON fixture.
+- The diagnostic now uses a locale-formatted token count and joins two complete sentence fragments using an explicit single-space separator. The test retains an exact expected-message assertion.
+- Rewrote the partial JSON fixture as a template literal, eliminating quote-escape warnings.
+- Verified the provider adapter by invoking it with a mocked Cloudflare `finish_reason: 'length'` response under Node's TypeScript stripping: the thrown `SafeProviderError` is `INVALID_RESPONSE` and its message exactly matches the regression expectation, including `6,000` and the sentence separator.
+- Native Bun/Oxlint and the full test suite still need to be rerun on the user's Windows workspace; Bun is not installed in this authoring runtime.

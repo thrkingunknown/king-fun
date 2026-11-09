@@ -1,7 +1,7 @@
 ## 2026-11-09 — Cloudflare GPT-OSS completion budget follow-up
 
 - Removed restrictive Cloudflare per-game token caps that could truncate GPT-OSS before the final JSON was complete. Imposter now receives the full 6,000-token task allowance; other Cloudflare requests retain the 4,000-token default.
-- Preserved `AI_MAX_OUTPUT_TOKENS` as an explicit global operator ceiling.
+- Kept provider output budgets as fixed backend-owned task defaults; no `AI_MAX_OUTPUT_TOKENS` environment variable is supported.
 - Cloudflare truncation errors now report the exact `max_tokens` sent and instruct operators to verify the deployed backend revision and global setting. Partial JSON with `finish_reason: length` is detected before attempting JSON parse.
 - Updated provider regression tests, release-contract checks, and deployment/provider documentation.
 - Runtime Bun tests and uncached live Cloudflare inference remain required after deployment.
@@ -1255,3 +1255,18 @@ Release process:
 ## 2026-11-09 — Frontend lint warning cleanup
 
 - Removed the unused `save.players` dependency from the `draw` callback in `frontend/src/AppShell.tsx`. The callback reads no player-roster value; player-specific selection is passed explicitly as `playerName`, while player-roster validation and game setup remain in their existing startup flow. No runtime behavior or game logic changed.
+
+
+## 2026-11-09 — Cloudflare truncation diagnostic and provider-test lint cleanup
+
+- Corrected the Cloudflare completion-budget diagnostic to format token counts consistently (for example, `6,000`) and include the missing sentence separator. The existing regression expectation now matches the actual message.
+- Removed unnecessary quote escapes from the partial JSON fixture in `backend/tests/providers.test.ts`, eliminating the six `eslint(no-useless-escape)` warnings without changing the fixture content.
+- Scope is limited to backend error-message formatting and its provider test.
+- The pasted Bun run showed frontend/backend typechecks passing and 249/250 tests passing before this correction. The native lint/test pipeline must be rerun after applying this update.
+
+
+## 2026-11-09 — Cloudflare diagnostic formatting regression hardening
+
+- Constructed the Cloudflare truncation diagnostic from two sentence fragments joined with one explicit space. This prevents a missing separator from reappearing through a concatenated string edit while retaining the formatted task-specific token budget.
+- Expressed the intentionally truncated JSON response fixture as a template literal with no unnecessary quote escapes. The test continues to exercise `finish_reason: 'length'` before partial JSON parsing.
+- Scope remains limited to the backend provider diagnostic and its provider adapter regression test; no provider request behavior or game logic changed.

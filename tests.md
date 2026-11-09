@@ -852,7 +852,7 @@ The service-worker shell cache is now `king-fun-shell-v8` because the applicatio
 
 ### Cloudflare GPT-OSS output budget and Imposter prompt
 
-- Cloudflare Imposter requests use one normalized secret word, exactly 20 validated 1–2-word hints, and a 6,000-token task-aware ceiling (still respecting an explicitly configured global `AI_MAX_OUTPUT_TOKENS` ceiling).
+- Cloudflare Imposter requests use one normalized secret word, exactly 20 validated 1–2-word hints, and a 6,000-token task-aware ceiling (using the fixed backend-owned task budget).
 - The Imposter prompt must explicitly put the secret answer in `text` and hints in `hints`; it must not contain the contradictory instruction to generate only hints. Non-Imposter prompts must not include Imposter-only hint guidance.
 - Cloudflare five-item GuessUp and Party Arcade batches retain the 4,000-token default rather than using smaller task-specific caps. Gemini/Groq parameters, game mechanics and provider deadlines remain unchanged.
 - Mock provider tests verify the emitted request body and prompt contract. A fresh, uncached live Workers AI request is an opt-in deployment acceptance test, not part of ordinary CI.
@@ -860,7 +860,7 @@ The service-worker shell cache is now `king-fun-shell-v8` because the applicatio
 
 ## Cloudflare GPT-OSS completion-budget follow-up (2026-11-09)
 
-- Cloudflare GPT-OSS now receives the full task-aware completion budget: 6,000 tokens for Imposter word/hints, 4,000 default for other requests; explicit `AI_MAX_OUTPUT_TOKENS` continues to act as a global operator ceiling.
+- Cloudflare GPT-OSS now receives the full task-aware completion budget: 6,000 tokens for Imposter word/hints, 4,000 default for other requests; budgets are fixed in backend code and are not environment-configurable.
 - No smaller per-game completion caps are applied to GPT-OSS, because the configured completion budget must cover reasoning and final JSON.
 - The provider-specific truncation message includes the exact `max_tokens` sent, so a deployed screenshot can identify the backend revision/budget.
 - Regression tests cover the 6,000 Imposter budget, 4,000 five-item batches, global override, actionable truncation message, and partial JSON with `finish_reason: length`.

@@ -94,9 +94,14 @@ describe('provider adapters', () => {
   })
 
   test('Cloudflare output truncation reports the server-side token-budget cause', async () => {
-    globalThis.fetch = (async () => Response.json({
-      choices: [{ finish_reason: 'length', message: { content: '{\"items\":[{\"text\":\"Penguin\",' } }] },
-    })) as typeof fetch
+    globalThis.fetch = (async () => {
+      return Response.json({
+        choices: [{
+          finish_reason: 'length',
+          message: { content: `{"items":[{"text":"Penguin",` },
+        }],
+      })
+    }) as typeof fetch
     await expect(generateWithProvider('cloudflare-workers-ai', {
       ...input, game: 'imposter', itemKind: 'word', count: 1, categoryId: 'animals',
     }, {
@@ -105,7 +110,7 @@ describe('provider adapters', () => {
       CLOUDFLARE_API_TOKEN: 'c'.repeat(32),
     })).rejects.toMatchObject({
       code: 'INVALID_RESPONSE',
-      message: 'Cloudflare Workers AI stopped at the 6,000-token completion limit before returning the complete JSON response. Check the deployed backend version and server-side AI_MAX_OUTPUT_TOKENS setting, then retry.',
+      message: 'Cloudflare Workers AI stopped at the 6,000-token completion budget before returning the complete JSON response. The backend uses fixed task-aware budgets; verify the deployed build and configured model, then retry.',
     })
   })
 
@@ -130,22 +135,6 @@ describe('provider adapters', () => {
     }
   })
 
-  test('Cloudflare respects an explicit global output-token ceiling', async () => {
-    let capturedBody: Record<string, unknown> | undefined
-    globalThis.fetch = (async (_url, init) => {
-      capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>
-      return Response.json({ choices: [{ message: { content: JSON.stringify({ items: [{ text: 'Penguin', hints: Array.from({ length: 20 }, (_, index) => `hint${index + 1}`) }] }) } }] })
-    }) as typeof fetch
-    await generateWithProvider('cloudflare-workers-ai', {
-      ...input, game: 'imposter', itemKind: 'word', count: 1, categoryId: 'animals',
-    }, {
-      AI_ENABLED: 'true',
-      AI_MAX_OUTPUT_TOKENS: '2048',
-      CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32),
-      CLOUDFLARE_API_TOKEN: 'c'.repeat(32),
-    })
-    expect(capturedBody?.max_tokens).toBe(2_048)
-  })
 
   test('Cloudflare retains the generic token budget for longer Truth prompts', async () => {
     let capturedBody: Record<string, unknown> | undefined

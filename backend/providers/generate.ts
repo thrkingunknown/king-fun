@@ -9,7 +9,6 @@ export type ProviderEnv = {
   CLOUDFLARE_ACCOUNT_ID?: string
   CLOUDFLARE_API_TOKEN?: string
   AI_ENABLED?: string
-  AI_MAX_OUTPUT_TOKENS?: string
   AI_PROVIDER_TIMEOUT_MS?: string
   CLOUDFLARE_AI_TIMEOUT_MS?: string
 }
@@ -243,8 +242,14 @@ function emptyResponseError(provider: ProviderId, data: unknown, maxOutputTokens
     const choice = envelope?.choices[0]
     const finishReason = isRecord(choice) && typeof choice.finish_reason === 'string' ? choice.finish_reason : undefined
     if (finishReason === 'length') {
+      const budgetDescription = typeof maxOutputTokens === 'number'
+        ? `the ${maxOutputTokens.toLocaleString('en-US')}-token completion budget`
+        : 'its configured completion budget'
       const message = provider === 'cloudflare-workers-ai'
-        ? `Cloudflare Workers AI stopped at the ${maxOutputTokens ?? 'configured'}-token completion limit before returning the complete JSON response. Check the deployed backend version and server-side AI_MAX_OUTPUT_TOKENS setting, then retry.`
+        ? [
+            `Cloudflare Workers AI stopped at ${budgetDescription} before returning the complete JSON response.`,
+            'The backend uses fixed task-aware budgets; verify the deployed build and configured model, then retry.',
+          ].join(' ')
         : 'The AI model reached its output limit before completing the content batch. Reduce the batch size and try again.'
       return new SafeProviderError('INVALID_RESPONSE', message, true, 502)
     }
@@ -276,9 +281,9 @@ function parseModelJson(text: string): unknown {
   }
 }
 
-function getOutputTokenLimit(env: ProviderEnv, input: GenerateInput): number {
-  const configured = Number(env.AI_MAX_OUTPUT_TOKENS)
-  if (Number.isSafeInteger(configured) && configured >= 256) return Math.min(configured, 6000)
+function getOutputTokenLimit(input: GenerateInput): number {
+  // Fixed backend-owned budgets. These are deliberately not environment
+  // variables: the deployment template has no AI_MAX_OUTPUT_TOKENS setting.
   return input.game === 'imposter' && input.itemKind === 'word' ? 6000 : 4000
 }
 /**
@@ -334,7 +339,7 @@ export async function generateWithProvider(
   if (input.suitability === 'adult' && input.adultMode !== true) throw new SafeProviderError('INVALID_REQUEST', 'Adult generation requires explicit 18+ mode.', false, 400)
   if (env.AI_ENABLED !== 'true') throw new SafeProviderError('BUDGET_EXHAUSTED', 'AI generation is disabled by the operator.', false, 503)
   const prompt = promptFor(input)
-  const maxOutputTokens = getProviderOutputTokenLimit(provider, input, getOutputTokenLimit(env, input))
+  const maxOutputTokens = getProviderOutputTokenLimit(provider, input, getOutputTokenLimit(input))
   const timeoutMs = getProviderTimeout(env, provider)
   const configuredSessionKey = sessionKey?.trim()
   let data: unknown
