@@ -64,7 +64,7 @@ const supportedTasks = [
 ]
 
 type GenerationProgress = {
-  stage: 'gateway-accepted' | 'vault-checking' | 'vault-hit' | 'vault-miss' | 'vault-waiting' | 'vault-busy' | 'vault-unavailable' | 'vault-skipped' | 'provider-starting' | 'provider-generated' | 'provider-failed' | 'vault-saving' | 'vault-saved' | 'vault-save-failed' | 'content-ready'
+  stage: 'gateway-accepted' | 'vault-checking' | 'vault-hit' | 'vault-miss' | 'vault-waiting' | 'vault-busy' | 'vault-unavailable' | 'vault-skipped' | 'provider-starting' | 'provider-waiting' | 'provider-generated' | 'provider-failed' | 'vault-saving' | 'vault-saved' | 'vault-save-failed' | 'content-ready'
   provider?: ProviderId
   detail?: string
 }
@@ -186,7 +186,19 @@ async function handleContentGenerateRequest(
 
     providerGenerationStarted = true
     report({ stage: 'provider-starting', provider, detail: `Generating with ${providerLabel(provider)}.` })
-    const items = await generateWithProvider(provider, generationInput, env, sessionKey, signal)
+    // Keep the NDJSON stream alive while the upstream provider is thinking.
+    // Android WebView/mobile networks can drop an otherwise healthy request if
+    // no response bytes arrive for long enough; Cloudflare Workers AI can take
+    // longer than Gemini/Groq for the same gateway flow.
+    const heartbeat = setInterval(() => {
+      report({ stage: 'provider-waiting', provider, detail: 'Waiting for the provider response.' })
+    }, 5_000)
+    let items
+    try {
+      items = await generateWithProvider(provider, generationInput, env, sessionKey, signal)
+    } finally {
+      clearInterval(heartbeat)
+    }
     report({ stage: 'provider-generated', provider, detail: 'Provider output passed server validation.' })
     if (!liveProviderTest && isContentVaultConfigured(env)) {
       report({ stage: 'vault-saving', detail: 'Saving the validated batch to the configured shared content vault.' })
