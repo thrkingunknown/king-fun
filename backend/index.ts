@@ -1,5 +1,5 @@
 import { Elysia } from 'elysia'
-import { generateWithProvider, type ProviderEnv } from './providers/generate.ts'
+import { generateWithProvider, normalizeGenerationInput, type ProviderEnv } from './providers/generate.ts'
 import { isNearDuplicateGeneratedText, validateGenerateInput } from './content/schema.ts'
 import { readBoundedText } from './security/body.ts'
 import { parseAllowedOrigins } from './security/origins.ts'
@@ -112,7 +112,9 @@ async function handleContentGenerateRequest(
     let parsedBody: unknown
     try { parsedBody = JSON.parse(rawBody) }
     catch { throw new SafeProviderError('INVALID_REQUEST', 'Request body must be valid JSON.', false, 400) }
-    const input = validateGenerateInput(parsedBody)
+    // Normalize Imposter word requests before cache lookup and provider routing.
+    // This also protects older clients that still submit count=5.
+    const input = normalizeGenerationInput(validateGenerateInput(parsedBody))
     if (input.suitability === 'adult' && input.adultMode !== true) throw new SafeProviderError('INVALID_REQUEST', 'Adult content requests require explicit 18+ mode.', false, 400)
     contentLockInput = input
     let generationInput = input

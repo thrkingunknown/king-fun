@@ -57,7 +57,13 @@ export function validateGenerateInput(value: unknown): GenerateInput {
   if (v.playerNames !== undefined && (!Array.isArray(v.playerNames) || v.playerNames.length < 2 || v.playerNames.length > 32 || v.playerNames.some(name => typeof name !== 'string' || name.trim().length < 1 || name.length > 80 || hasControlCharacters(name)))) invalid('Invalid player names.')
   if (v.currentTurnPlayerNames !== undefined && (!Array.isArray(v.currentTurnPlayerNames) || v.currentTurnPlayerNames.length > 8 || v.currentTurnPlayerNames.some(name => typeof name !== 'string' || name.trim().length < 1 || name.length > 80 || hasControlCharacters(name)))) invalid('Invalid current-turn player names.')
   if (!Array.isArray(v.recentItems) || v.recentItems.length > 30 || v.recentItems.some(item => typeof item !== 'string' || item.length > 260 || hasControlCharacters(item))) invalid('Invalid recent-item exclusions.')
-  return v as unknown as GenerateInput
+  // Accept legacy player-context properties during rollout, but strip them at
+  // the API boundary so they cannot enter provider, cache, or logging paths.
+  const safeInput = { ...v }
+  delete safeInput.playerCount
+  delete safeInput.playerNames
+  delete safeInput.currentTurnPlayerNames
+  return safeInput as unknown as GenerateInput
 }
 
 function tokenSet(text: string): Set<string> {

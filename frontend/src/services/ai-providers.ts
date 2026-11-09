@@ -244,10 +244,6 @@ export type AiContentRequest = {
   categoryDescription?: string
   count?: number
   recentItems?: string[]
-  playerCount?: number
-  playerNames?: string[]
-  /** Names of player(s) whose turn it is now — prompt must target them, not others. */
-  currentTurnPlayerNames?: string[]
   locale?: string
   suitability?: 'general' | 'teen' | 'adult'
   /** Explicit 18+ mode flag from settings; required for adult suitability. */
@@ -317,9 +313,6 @@ export async function generateAiContent(
           suitability,
           adultMode,
           count: Math.min(5, Math.max(1, input.count ?? 5)),
-          ...(input.playerCount ? { playerCount: input.playerCount } : {}),
-          ...(input.playerNames?.length ? { playerNames: input.playerNames.slice(0, 32).map(name => name.trim().slice(0, 80)) } : {}),
-          ...(input.currentTurnPlayerNames?.length ? { currentTurnPlayerNames: input.currentTurnPlayerNames.slice(0, 8).map(name => name.trim().slice(0, 80)).filter(Boolean) } : {}),
           recentItems: (input.recentItems ?? []).slice(-30),
         }),
       })

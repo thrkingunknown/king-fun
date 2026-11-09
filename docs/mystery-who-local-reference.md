@@ -95,7 +95,7 @@ When multiple Mystics exist and hints are enabled, they may receive either the s
 
 The report's static audit states 30 built-in categories, 1,800 word entries (60 per category), and 20 hints per entry (36,000 hint entries, with 531 unique hint strings). It warns that some entries are generic category-related terms rather than suitable secret answers and that some hints are semantically mismatched to their words. A passing count/duplicate audit does not prove clue quality.
 
-Current KING-FUN implementation retains the report's 30 category definitions as metadata-only packs and the additional 18+ After Dark category. No Imposter answer or hint entries are bundled. At round start, the selected category's title and description are sent through the ordered provider pipeline to generate five category-specific words with exactly 20 distinct answer-safe hints per word. Manual custom word/hint packs remain local and offline-capable; built-in categories need connectivity and provider availability.
+Current KING-FUN implementation retains the report's 30 category definitions as metadata-only packs and the additional 18+ After Dark category. No Imposter answer or hint entries are bundled. At round start, the selected category's title and description are sent through the ordered provider pipeline to generate exactly one category-specific word per game start with exactly 20 distinct answer-safe hints, regardless of provider. The shared content vault accumulates validated words across starts. Manual custom word/hint packs remain local and offline-capable; built-in categories need connectivity and provider availability.
 
 ## 5. Manual and AI custom categories
 

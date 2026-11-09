@@ -24,7 +24,7 @@ Do not set Vercel's Root Directory to `frontend/`; that would exclude the siblin
 
 ## 2. AI category authoring and content persistence
 
-Imposter category suggestion generation remains a distinct metadata task (`game=imposter`, `itemKind=category`) for creating new categories. Separately, every built-in metadata-only category and every API-created category passes its selected title and description to the normal `game=imposter`, `itemKind=word` provider-order request at round start. The response must contain five category-specific words with exactly 20 distinct answer-safe hints per word. No built-in word bank is bundled. Generated words keep the selected category ID for cache and anti-repeat isolation. Manual local packs remain the offline alternative; built-in/API-only categories have no curated fallback and fail clearly when all providers are unavailable.
+Imposter category suggestion generation remains a distinct metadata task (`game=imposter`, `itemKind=category`) for creating new categories. Separately, every built-in metadata-only category and every API-created category passes its selected title and description to the normal `game=imposter`, `itemKind=word` provider-order request at round start. The response must contain exactly one category-specific word with exactly 20 distinct answer-safe hints per game start, regardless of provider. The shared content vault accumulates validated words over time. No built-in word bank is bundled. Generated words keep the selected category ID for cache and anti-repeat isolation. Manual local packs remain the offline alternative; built-in/API-only categories have no curated fallback and fail clearly when all providers are unavailable.
 
 ## 3. Required lock and CI gate
 

@@ -48,7 +48,7 @@ This document is a concise implementation handoff. `requirements.md` and `instru
 - GuessUp has editable teams/decks, timed rounds, Correct/Pass, scoring, handoff, optional tilt/audio/haptics, and local reports.
 - Truth or Dare has all three player modes, separate player and Truth/Dare wheels, manual choice, reactions, replace/skip/opt-out/report.
 - I Have Never has all three player modes, neutral response methods, group responses, points/fingers/stories, skip, reactions, and reports.
-- All 30 general Imposter categories plus the 18+ After Dark category remain available as metadata-only packs. No built-in Imposter words/hints are bundled; category-first rounds pass the selected title/description through provider order and generate five words with exactly 20 distinct answer-safe hints each. Manual local packs remain the offline path.
+- All 30 general Imposter categories plus the 18+ After Dark category remain available as metadata-only packs. No built-in Imposter words/hints are bundled; category-first rounds pass the selected title/description through provider order and generate exactly one secret word per game start with exactly 20 distinct answer-safe hints, regardless of provider; the shared vault accumulates validated words across sessions. Manual local packs remain the offline path.
 
 ### Phase 5 — AI provider gateway and hosting
 

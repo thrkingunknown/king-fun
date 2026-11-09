@@ -1423,3 +1423,36 @@ Run `bun install --frozen-lockfile`, `bun run check`, and `bun run test:e2e` on 
 - Root cause: the test read historical startup messages sequentially from a transient overlay after game startup. The production flow intentionally clears the overlay after the game-ready handoff, so a slow test runner can lose the locator between assertions.
 - Source correction: observe overlay text mutations during startup, then assert the captured vault/provider/save/content-ready history after the role card appears. The Node release-contract audit and Bun regression-contract test were updated to guard this handoff behavior. Production UI timing, game behavior, and provider integrations are unchanged.
 - Verification boundary: Bun and Playwright are not installed in this authoring environment, so the focused E2E and full browser suite must be rerun on the user's Bun workspace.
+
+
+## 2026-11-09 — Cloudflare timeout follow-up from cross-platform reproduction
+
+- User supplied a Windows browser Network capture showing repeated five-second `provider-waiting` frames followed by the same timeout. The CSP-blocked `https://vercel.live/next-live/feedback/feedback.js` console message is unrelated: it is a separate development feedback script and does not block the `/v1/content/generate` request.
+- The cross-platform capture confirms the failure is at the shared backend-to-Cloudflare inference boundary, not a Tauri or Android HTTP transport bug. The backend heartbeat stream remains connected while the provider request is pending.
+- Reduced only Cloudflare Imposter requests from five words (100 hints) to one word (20 hints), because the start flow consumes only one secret word. Cloudflare Imposter output is now capped at 1,024 tokens. Gemini and Groq still receive five words, and other Cloudflare games are unchanged.
+- Added regression coverage for provider-specific request counts and updated the Cloudflare Imposter token-budget assertion.
+- Not yet live-verified: the next acceptance test must prove a fresh Cloudflare inference (not a vault hit) completes within the backend deadline on desktop and Android using the same API deployment.
+
+## 2026-11-09 — Imposter generation batch normalized across every provider
+
+- Changed normal Imposter round startup from `count: 5` to `count: 1` in the shared frontend request, so Gemini, Groq, and Cloudflare all receive only the one secret word actually consumed by that round. Each generated word retains its exact 20-hint contract.
+- Added a backend `normalizeGenerationInput` boundary normalization so older clients that still submit `count: 5` are reduced to `count: 1` before any provider adapter is called. The behavior is provider-independent; non-Imposter game batch sizes are unchanged.
+- The shared content vault still merges a newly validated item with its existing pool, so it can build a larger reusable category pool gradually across successful starts.
+- Updated the role-reveal E2E fixture to return one word and assert request `count: 1`; updated provider tests to cover the backend normalization and non-Imposter preservation.
+- `node scripts/check-release-contracts.mjs`: **185/185 passed**. TypeScript syntax transpilation reported zero diagnostics for the five modified TS/TSX files. A direct Node TypeScript-stripping smoke test confirmed Imposter `count: 5` normalizes to `1` regardless of provider and non-Imposter `count: 5` remains `5`.
+- Exact-revision Bun unit tests, Playwright, production build, and live inference for Gemini/Groq/Cloudflare remain to be run. This source change does not claim live provider success.
+
+
+## 2026-11-09 — GuessUp and short-batch generation optimization
+
+- Source changes: GuessUp requests five items explicitly (matching the client/server maximum), no longer sends player names/count/current-turn identities in generation requests; the backend also ignores legacy player fields in prompts, and reuses a shuffled Team A AI-generated deck for Team B when no separate local Team B deck exists. This removes a second serial provider call in the worst-case AI-only startup path; independent local decks and the Team-B-only AI-fill path remain intact.
+- Cloudflare output ceilings: 1,024 tokens for one-item Imposter and five-item GuessUp charades; 2,048 tokens for five-item Party Arcade prompt batches. Longer Truth/Dare/statement responses retain the configured limit. Gemini/Groq provider parameters are unchanged.
+- Added unit-source coverage for deck reuse, privacy, output ceilings, and static release-contract checks.
+- Verification limitation: Bun 1.4.4 and workspace dependencies are not installed in this authoring runtime. The Bun typecheck, lint, unit tests, release-contract script, production build, and Playwright suite have not been run here. The source is ready for verification in the project's pinned Bun environment; live model latency still requires deployed uncached provider requests.
+
+
+## 2026-11-09 — User-reported frontend lint warning
+
+- User-provided Oxlint output: frontend lint completed with 0 errors and one `react-hooks(exhaustive-deps)` warning for unnecessary dependency `save.players` in the `draw` callback at `AppShell.tsx:496`.
+- Source correction: removed only `save.players` from that callback dependency array. Inspection confirms `draw` does not read `save.players`; roster checks and snapshots remain in game-start code, and per-player content selection receives `playerName` explicitly.
+- The user's pasted output does not include the backend lint result. This authoring environment does not have Bun/workspace dependencies, so native frontend/backend Oxlint reruns and the full Bun check are not claimed. Re-run `bun run --filter @king-fun/frontend lint && bun run --filter @king-fun/backend lint` on this archive.

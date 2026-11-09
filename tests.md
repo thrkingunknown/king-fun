@@ -129,7 +129,7 @@ The current implementation adds `src/domain/shared/validation.test.ts`, `src/dom
 - The shared startup overlay appears for every game Start path, displays the selected `GameMark`, respects reduced motion, and remains visible until the local session is ready. The Imposter generation E2E responds with NDJSON progress frames and asserts content-vault lookup, provider generation, validated-content save, and ready states are visible before gameplay.
 - Backend route tests verify that `Accept: application/x-ndjson` streams ordered progress frames followed by a final status/body frame, while ordinary clients retain the existing JSON response contract.
 
-- The role-reveal browser regression stubs `/api/v1/content/generate` with a schema-shaped five-word batch and asserts that the selected built-in category title/description reach the provider pipeline. This keeps the reveal test deterministic without restoring a bundled word bank or depending on a live provider/backend. The test captures the loading overlay's text mutations through its intentional unmount, so startup-history assertions do not race the final game-ready handoff.
+- The role-reveal browser regression stubs `/api/v1/content/generate` with a schema-shaped one-word response and asserts that the selected built-in category title/description reach the provider pipeline. This keeps the reveal test deterministic without restoring a bundled word bank or depending on a live provider/backend. The test captures the loading overlay's text mutations through its intentional unmount, so startup-history assertions do not race the final game-ready handoff.
 
 - **TEST-IMP-001:** valid player roster starts a round; invalid roster is rejected.
 - **TEST-IMP-002:** civilian/special role counts match the configured ruleset.
@@ -239,7 +239,7 @@ The current automated domain test files cover the report-defined source behavior
 - **TEST-AI-005:** timeouts, network failures, and transient 5xx use bounded retry/cooldown; 401/403/429/policy/validation errors do not enter infinite retry.
 - **TEST-AI-006:** circuit breaker stops repeated calls after threshold and recovers after configured cooldown; kill switch prevents further Cloudflare AI spend.
 - **TEST-AI-007:** Cloudflare Workers AI adapter uses server-side Account ID/token/model and validates the actual REST response shape; no secret is returned.
-- **TEST-AI-029:** Cloudflare uses its isolated 52-second timeout (capped below Vercel's 60-second function deadline), a 3,072-token ceiling for Imposter word batches only (other game outputs retain their existing allowance), and `options.rejectIfBusy` to avoid waiting in provider capacity queues; Gemini/Groq timeout settings remain unchanged.
+- **TEST-AI-029:** Cloudflare uses its isolated 52-second timeout (capped below Vercel's 60-second function deadline), a 1,024-token ceiling for one-word Imposter and five-item GuessUp charade requests, a 2,048-token ceiling for five-item Party Arcade prompts, and `options.rejectIfBusy` to avoid waiting in provider capacity queues; longer Truth/Dare/statement tasks keep the configured limit and Gemini/Groq remain unchanged.
 - **TEST-AI-008:** Gemini adapter uses a current official key-auth/request schema and validates its returned structured content.
 - **TEST-AI-009:** Groq adapter uses the current official API endpoint/schema and validates its returned structured content.
 - **TEST-AI-010:** every provider output is validated against runtime schema, count, lengths, locale, category, item kind, and suitability.
@@ -261,6 +261,8 @@ The current automated domain test files cover the report-defined source behavior
 - **TEST-AI-026:** Cloudflare compatible `{ result: { choices } }` response envelopes are normalized and schema-validated.
 - **TEST-AI-027:** GPT-OSS Responses-style `output_text` and `output[].content[].text` payloads are extracted and schema-validated for compatibility during endpoint migration.
 - **TEST-AI-028:** Cloudflare empty assistant content and explicit refusal map to safe actionable errors without exposing raw provider payloads.
+- **TEST-AI-030:** All generation requests omit player names/player counts/current-turn identities, including requests from older clients that still submit legacy player fields; the backend strips those fields at its validation boundary before provider/cache routing. GuessUp requests exactly five charades and does not make a second sequential AI request for Team B when the Team A deck was just generated; Team B uses a shuffled copy of that same prompt set unless an independent local Team B deck exists.
+- **TEST-AI-031:** Cloudflare five-item GuessUp and Party Arcade requests use the bounded output ceilings; longer Truth/Dare requests retain the configured output ceiling. Gemini/Groq request parameters remain unchanged.
 
 ### Elysia backend security/contract tests
 
@@ -838,3 +840,11 @@ The service-worker shell cache is now `king-fun-shell-v8` because the applicatio
 - The overlay retains up to twelve startup events, including confirmed content-vault writes, until the final handoff.
 - I Have Never startup tests must select One at a time when asserting an opening statement before gameplay. Spin-wheel mode intentionally defers prompt selection until a player is selected.
 - I Have Never provider generation is mocked with a deterministic, schema-shaped response; tests do not depend on a live provider.
+
+
+## Cloudflare Imposter latency regression
+
+- Verify that the frontend requests `count: 1` for Imposter words and the backend normalizes legacy `count: 5` requests to `count: 1` for Gemini, Groq, and Cloudflare.
+- Verify all other game requests retain their requested batch sizes.
+- Verify every provider's Imposter single-word response retains the exact 20-hint validation contract; Cloudflare continues to use its 1,024-token response ceiling.
+- Perform a fresh, uncached Imposter start after deployment and inspect the request's `provider-generated` event and `provider` result; a `content-vault` hit does not prove live inference.

@@ -5,6 +5,7 @@ import {
   endGuessUpTeamRound,
   prepareGuessUpTeamB,
   reconcileGuessUpTimer,
+  resolveGuessUpTeamBDeck,
   scoreGuessUpCard,
   startGuessUpTeamB,
   tickGuessUpTimer,
@@ -23,6 +24,19 @@ describe('GuessUp team rounds', () => {
     expect(round.teamBPlayers).toEqual(['Sam', 'Riley'])
     expect(round.activeTeam).toBe('A')
     expect(round.seconds).toBe(60)
+  })
+
+  test('reuses one shuffled Team A generation result for Team B when no separate deck exists', () => {
+    const teamA = ['Coffee', 'Lighthouse', 'Skateboard']
+    const shared = resolveGuessUpTeamBDeck(teamA, [], true, items => [...items].reverse())
+    expect(shared).toEqual(['Skateboard', 'Lighthouse', 'Coffee'])
+    expect(teamA).toEqual(['Coffee', 'Lighthouse', 'Skateboard'])
+  })
+
+  test('preserves an independent Team B deck and does not fabricate one for local Team A content', () => {
+    expect(resolveGuessUpTeamBDeck(['A'], ['B'], true, items => [...items].reverse())).toEqual(['B'])
+    expect(resolveGuessUpTeamBDeck(['A'], [], false, items => [...items].reverse())).toEqual([])
+    expect(resolveGuessUpTeamBDeck([], [], true, items => [...items].reverse())).toEqual([])
   })
 
   test('accepts explicit teams, names, and a supported duration', () => {

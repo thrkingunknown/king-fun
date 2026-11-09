@@ -22,9 +22,9 @@ export type GenerateInput = {
   suitability: 'general' | 'teen' | 'adult'
   adultMode?: boolean
   count: number
+  /** Deprecated legacy fields: accepted for compatibility, then stripped at the API validation boundary. */
   playerCount?: number
   playerNames?: string[]
-  /** Names of player(s) whose turn it is now — prompt must target them, not others. */
   currentTurnPlayerNames?: string[]
   recentItems: string[]
 }

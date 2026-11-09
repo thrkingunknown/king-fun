@@ -56,7 +56,7 @@ The complete user-supplied 977-line Mystery Who report is archived verbatim at [
 
 ### Explicitly open
 
-The report does not define Troll Mode effects, civilian/mystic elimination and win rules, or full tie/no-vote victory transitions. Do not invent these. KING-FUN retains all 30 general report-named categories plus its 18+ After Dark category as metadata-only packs. No built-in Imposter words or hints are bundled. A selected category's title and description are passed to the provider-order API pipeline to generate five words with exactly 20 distinct answer-safe hints per word. Manually authored/imported local packs remain playable offline.
+The report does not define Troll Mode effects, civilian/mystic elimination and win rules, or full tie/no-vote victory transitions. Do not invent these. KING-FUN retains all 30 general report-named categories plus its 18+ After Dark category as metadata-only packs. No built-in Imposter words or hints are bundled. A selected category's title and description are passed to the provider-order API pipeline to generate exactly one secret word per game start, with exactly 20 distinct answer-safe hints. This request size is the same for Gemini, Groq, and Cloudflare; the shared content vault accumulates validated words across sessions. Manually authored/imported local packs remain playable offline.
 
 
 ## 4. Truth or Dare target flow

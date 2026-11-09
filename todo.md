@@ -319,7 +319,7 @@ Reference flows are documented in `docs/gameplay-reference.md`. Original copy, c
 - [x] Imposter's report-defined local loop is implemented; online mode excluded, and report-undefined rules remain unimplemented.
 - [ ] Browser verification for touch/keyboard/screen reader, reduced motion, safe areas, variable rosters, reload/resume, focus, timer/sensor behavior, and narrow viewport overflow.
 - [x] Historical Phase 4 test snapshots were superseded by the user-confirmed Phase 5 Bun 1.4.4 run (161 tests, both workspace typechecks and frontend build passed). Phase 6 adds more checks and requires a fresh run on the exact Phase 6 archive.
-- [x] Built-in Mystery Who categories are metadata-only and generate five words per round through the provider-order pipeline with exactly 20 distinct answer-safe hints each. Manual local packs provide the offline path. Provider/network acceptance remains open.
+- [x] Built-in Mystery Who categories are metadata-only and generate one word per round through the provider-order pipeline with exactly 20 distinct answer-safe hints, regardless of provider; the shared vault accumulates validated words across rounds. Manual local packs provide the offline path. Provider/network acceptance remains open.
 - [!] Troll Mode and elimination/faction win/tie rules are not defined in the report; do not infer them.
 - [→ Phase 5] Optional AI content generation requires the approved secure Elysia/Bun provider gateway.
 

@@ -222,7 +222,7 @@ test.describe('KING-FUN responsive experience', () => {
     // this UI regression deterministic by stubbing the ordered LLM gateway with
     // a schema-valid response; the test is about the private reveal interaction,
     // not whether a live provider or deployed backend is available.
-    const generatedWords = ['Lantern', 'Compass', 'Pebble', 'Saffron', 'Telescope']
+    const generatedWords = ['Lantern']
     const wordHints = [
       'a recognisable physical form', 'it can have different sizes', 'people may use it regularly',
       'it can be made from different materials', 'it may be stored indoors', 'it has a familiar purpose',
@@ -358,7 +358,7 @@ test.describe('KING-FUN responsive experience', () => {
       game: 'imposter',
       itemKind: 'word',
       categoryName: selectedCategoryName,
-      count: 5,
+      count: 1,
     })
     expect(typeof generationRequest?.categoryId).toBe('string')
     expect(String(generationRequest?.categoryId).trim().length).toBeGreaterThan(0)

@@ -4,7 +4,13 @@ import { SafeProviderError } from '../types.ts'
 
 const valid = { schemaVersion: 1, requestId: 'request_12345678', game: 'truth-or-dare', itemKind: 'truth', categoryId: 'icebreakers', locale: 'en', suitability: 'general', count: 3, recentItems: ['What is your biggest fear?'] }
 describe('AI generation request contract', () => {
-  test('accepts a bounded supported request', () => { expect(validateGenerateInput({ ...valid, playerNames: ['Sam', 'Taylor'] }).count).toBe(3) })
+  test('accepts a bounded supported request', () => { expect(validateGenerateInput(valid).count).toBe(3) })
+  test('accepts legacy player context for compatibility but strips it before provider routing', () => {
+    const input = validateGenerateInput({ ...valid, playerCount: 4, playerNames: ['Sam', 'Taylor'], currentTurnPlayerNames: ['Sam'] })
+    expect(Object.hasOwn(input, 'playerCount')).toBe(false)
+    expect(Object.hasOwn(input, 'playerNames')).toBe(false)
+    expect(Object.hasOwn(input, 'currentTurnPlayerNames')).toBe(false)
+  })
   test('rejects arbitrary games, kinds, oversized batches and arbitrary metadata', () => {
     for (const value of [{ ...valid, game: 'proxy' }, { ...valid, itemKind: 'tool' }, { ...valid, count: 6 }, { ...valid, categoryId: '../secret' }]) expect(() => validateGenerateInput(value)).toThrow(SafeProviderError)
   })

@@ -448,7 +448,6 @@ export default function AppShell({ initialState, initialRevision, initialPersist
     const online = typeof navigator !== 'undefined' ? navigator.onLine : true
     const aiGame = (['imposter', 'guessup', 'truth-or-dare', 'never-have-i-ever', 'fake-it', 'fake-story', 'fact-or-fiction', 'wrong-answers-only', 'hot-bomb', 'hot-bomb-duel', 'whos-most-likely', 'would-you-rather', 'share-or-pass', 'challenge-20', 'tilt-it', 'letterburg', 'discussion-starter', 'who-am-i', 'ten-tangle', 'qupid', 'questions-for-love', 'a-or-b', 'reverse-singing'] as const).includes(game as any)
     const itemKind = kind === 'phrase' || kind === 'charade' ? 'charade' : kind === 'word' ? 'word' : kind === 'truth' ? 'truth' : kind === 'dare' ? 'dare' : kind === 'never-have-i-ever' ? 'statement' : kind === 'party-prompt' ? 'party-prompt' : null
-    const currentTurnPlayerNames = playerName?.trim() ? [playerName.trim()] : undefined
     if (online && aiGame && itemKind && itemKind !== 'word') {
       const categoryId = (packIds[0] ?? game).toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 64) || 'general'
       const sourcePack = contentPacks.find(pack => String(pack.id) === packIds[0] && pack.gameId === game)
@@ -459,7 +458,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
         ...seenIds.map(id => contentItems.find(item => item.id === id)?.text ?? aiGeneratedTextRef.current.get(id)),
       ].filter((v): v is string => Boolean(v)))].slice(-30)
       try {
-        const result = await generateAiContent({ game: game as AiGame, itemKind: itemKind as AiItemKind, categoryId, ...(sourcePack ? { categoryName: sourcePack.name, categoryDescription: sourcePack.description } : {}), count: 1, suitability, adultMode: save.adultMode, playerCount: save.players.length, playerNames: save.players.map(player => player.name), ...(currentTurnPlayerNames ? { currentTurnPlayerNames } : {}), recentItems: recentTexts }, undefined, reportAiGenerationProgress)
+        const result = await generateAiContent({ game: game as AiGame, itemKind: itemKind as AiItemKind, categoryId, ...(sourcePack ? { categoryName: sourcePack.name, categoryDescription: sourcePack.description } : {}), count: 1, suitability, adultMode: save.adultMode, recentItems: recentTexts }, undefined, reportAiGenerationProgress)
         const first = result.items[0]
         setToast(result.provider === 'content-vault'
           ? 'Loaded fresh content from the content vault.'
@@ -494,7 +493,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
     const local = selectContent(game, kind, packIds, seenIds, true, playerName)
     if (!local && !online) setToast('Offline content is unavailable for this selection. Reconnect to generate fresh content from the API.')
     return local
-  }, [contentItems, contentPacks, save.adultMode, save.players, save.recent, selectContent, reportAiGenerationProgress])
+  }, [contentItems, contentPacks, save.adultMode, save.recent, selectContent, reportAiGenerationProgress])
 
   const drawGuessUpDeck = (packIds: readonly string[], excludeIds: ReadonlySet<string> = new Set()): ContentItem[] => {
     const pool = uniqueContentItems(contentItems.filter(item => contentAllowedForMode(item, save.adultMode) && !blockedContentIdsRef.current.has(item.id) && !excludeIds.has(item.id) && item.gameId === 'guessup' && packIds.includes(item.packId) && (item.kind === 'phrase' || item.kind === 'word')))
@@ -708,7 +707,9 @@ export default function AppShell({ initialState, initialRevision, initialPersist
               categoryId: String(sourcePack.id),
               categoryName: sourcePack.name,
               categoryDescription: sourcePack.description,
-              count: 5,
+              // A single Imposter round consumes one secret word. Request only
+              // that item from every provider; the shared vault grows over time.
+              count: 1,
               suitability: sourcePack.suitability,
               adultMode: sourcePack.suitability === 'adult',
               recentItems: usedWordTexts,
@@ -779,18 +780,19 @@ export default function AppShell({ initialState, initialRevision, initialPersist
         phase = 'reveal'
         if (!round.votingEnabled) data = { ...data, autoResolveAfterDiscussion: true }
       } else if (game === 'guessup') {
-        const { createGuessUpRound } = await loadGuessUpRules()
+        const { createGuessUpRound, resolveGuessUpTeamBDeck } = await loadGuessUpRules()
         let selectedDeck = drawGuessUpDeck(config.packIds)
         let selectedDeckB = drawGuessUpDeck(config.packIds, new Set(selectedDeck.map(item => item.id)))
+        let selectedDeckFromGeneration = false
         if (selectedDeck.length === 0) {
           const sourcePack = gameContentPacks.find(pack => config.packIds.includes(pack.id))
           if (sourcePack) {
             try {
               const generated = await generateAiContent({
                 game: 'guessup', itemKind: 'charade', categoryId: String(sourcePack.id),
-                categoryName: sourcePack.name, categoryDescription: sourcePack.description, count: 12,
+                categoryName: sourcePack.name, categoryDescription: sourcePack.description, count: 5,
                 suitability: save.adultMode ? 'adult' : 'general', adultMode: save.adultMode,
-                playerCount: save.players.length, playerNames: save.players.map(player => player.name), recentItems: [],
+                recentItems: [],
               }, undefined, reportAiGenerationProgress)
               setToast(`Generated a fresh GuessUp deck with ${generated.provider === 'cloudflare-workers-ai' ? 'Cloudflare Workers AI' : generated.provider}.`)
               selectedDeck = generated.items.map(item => ({
@@ -799,6 +801,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
                 suitability: save.adultMode ? 'adult' as const : 'general' as const, tags: ['guessup', 'ai'],
                 provenance: { source: 'ai-assisted:gateway' as const, license: 'UserCreated' as const, creator: 'ai' as const, createdAt: Date.now(), reviewedAt: null },
               }))
+              selectedDeckFromGeneration = selectedDeck.length > 0
             } catch (error) {
               setGameLoadingEntry('guessup-generation-error', 'GuessUp generation failed', error instanceof Error ? error.message : 'Try again shortly.', 'error')
               setToast(`GuessUp generation failed: ${error instanceof Error ? error.message : 'Try again shortly.'}`)
@@ -806,16 +809,20 @@ export default function AppShell({ initialState, initialRevision, initialPersist
           }
         }
         if (selectedDeckB.length === 0 && selectedDeck.length > 0) {
-          selectedDeckB = drawGuessUpDeck(config.packIds, new Set(selectedDeck.map(item => item.id)))
+          // Preserve separate local decks when available. If Team A's deck came
+          // from the generation path and Team B has no independent local deck,
+          // reuse the same prompts in a different order. This is fairer between
+          // teams and avoids a second serial provider request during startup.
+          selectedDeckB = resolveGuessUpTeamBDeck(selectedDeck, selectedDeckB, selectedDeckFromGeneration, secureShuffle)
           if (selectedDeckB.length === 0) {
             const sourcePack = gameContentPacks.find(pack => config.packIds.includes(pack.id))
             if (sourcePack) {
               try {
                 const generated = await generateAiContent({
                   game: 'guessup', itemKind: 'charade', categoryId: String(sourcePack.id),
-                  categoryName: sourcePack.name, categoryDescription: sourcePack.description, count: 12,
+                  categoryName: sourcePack.name, categoryDescription: sourcePack.description, count: 5,
                   suitability: save.adultMode ? 'adult' : 'general', adultMode: save.adultMode,
-                  playerCount: save.players.length, playerNames: save.players.map(player => player.name), recentItems: selectedDeck.map(item => item.text),
+                  recentItems: selectedDeck.map(item => item.text),
                 }, undefined, reportAiGenerationProgress)
                 selectedDeckB = generated.items.map(item => ({
                   id: asContentId(`ai:${item.id}`), gameId: 'guessup' as const, kind: 'phrase' as const, text: item.text,
@@ -955,7 +962,6 @@ export default function AppShell({ initialState, initialRevision, initialPersist
                 game: game as AiGame, itemKind: 'party-prompt', categoryId: String(sourcePack.id),
                 categoryName: sourcePack.name, categoryDescription: sourcePack.description, count: 5,
                 suitability: save.adultMode ? 'adult' : 'general', adultMode: save.adultMode,
-                playerCount: save.players.length, playerNames: save.players.map(player => player.name),
                 recentItems: recentIds.map(id => contentItems.find(item => item.id === id)?.text ?? aiGeneratedTextRef.current.get(id)).filter((text): text is string => Boolean(text)).slice(-30),
               }, undefined, reportAiGenerationProgress)
               setToast(generated.provider === 'content-vault'

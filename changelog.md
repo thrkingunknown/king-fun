@@ -1,3 +1,13 @@
+## 2026-11-09 — One-word Imposter generation across all providers
+
+### Changed
+- Imposter game startup now requests exactly one secret word (with the existing 20-hint contract) from Gemini, Groq, and Cloudflare alike. A round consumes one word; the shared content vault accumulates validated words across successful starts.
+- The backend normalizes legacy clients that still send `count: 5` so the selected provider also receives `count: 1`. Other games preserve their requested batch sizes.
+- Updated the Imposter role-reveal E2E fixture/assertion, provider-input tests, requirements, gameplay/provider documentation, and test checklist to the one-word contract.
+
+### Verification
+- Node release-contract audit passed **185/185**; TypeScript syntax transpilation passed for all five modified TS/TSX files; a direct normalization smoke test confirmed every provider receives count 1 for Imposter and other games retain their count. Bun 1.4.4 backend tests, full check, Playwright E2E, and live provider calls remain pending.
+
 ## 2026-11-08 — Android release signing and branded launcher icon fixes
 
 ### Fixed
@@ -1202,3 +1212,26 @@ Release process:
 - Fixed the role-reveal browser test's transient-overlay race: it now records the startup overlay's text history while mounted and verifies the vault lookup, provider generation, confirmed vault save, and content-ready events after the role card is ready.
 - Updated the static release-contract audit and added a Bun regression contract for the history-capture strategy.
 - Kept the production loading-overlay lifecycle and game-start timing unchanged; this corrects only the test's assumption that the overlay remains mounted through sequential assertions.
+
+
+## 2026-11-09 — Cloudflare Imposter batch reduction
+
+- New browser capture showed the Cloudflare upstream request remaining in `provider-waiting` until the server-side provider deadline, on Windows as well as Android. This rules out an Android-only transport explanation for the reproduced failure.
+- Root cause in the request shape: every Imposter start asks every provider for five words, each with 20 hints, but the game immediately selects and uses only one word. This creates 100 generated hints for one session and unnecessarily increases Cloudflare inference time.
+- Backend now reduces only Cloudflare Workers AI Imposter word requests to one item and caps that single-word response at 1,024 output tokens. Gemini/Groq retain five-item prefill batches; all other Cloudflare games, models, prompts and client/game code are unchanged. The content vault continues accumulating one validated word per Cloudflare-backed session until its normal five-item cache threshold is met.
+- Added a provider-input regression test to verify the Cloudflare-only reduction and ensure Gemini, Groq and other Cloudflare games retain their prior counts.
+- Verification boundary: this source-side change still requires a real uncached Cloudflare Imposter request against the deployed Vercel backend; the authoring environment does not have deployment credentials or Cloudflare secrets.
+
+
+## 2026-11-09 — GuessUp and short-batch generation optimization
+
+- Corrected both GuessUp AI request call sites to declare the actual five-item batch limit instead of requesting 12 and relying on the frontend wrapper to silently clamp it to five.
+- Removed player count, player names, and current-turn identities from every frontend generation request. The backend no longer interpolates legacy player-context fields into any provider prompt, even if an older client still sends them; this follows the provider-routing privacy contract and reduces prompt size.
+- Eliminated the second sequential inference at GuessUp startup when Team A's deck was just generated remotely and no independent Team B local deck exists. Team B receives a shuffled copy of the generated deck, making the challenge set comparable and keeping startup to one model roundtrip. Distinct local Team B content remains preferred; when Team A uses local content and Team B has none, the existing separate AI-fill path remains.
+- Added Cloudflare-only output ceilings for short batches: 1,024 tokens for five GuessUp charades and 2,048 tokens for five Party Arcade prompts. One-word Imposter stays at 1,024; longer Truth/Dare/statement prompts and all Gemini/Groq budgets are unchanged.
+- Added pure GuessUp deck-resolution tests, provider adapter tests for prompt privacy/token ceilings, and static release-contract checks.
+
+
+## 2026-11-09 — Frontend lint warning cleanup
+
+- Removed the unused `save.players` dependency from the `draw` callback in `frontend/src/AppShell.tsx`. The callback reads no player-roster value; player-specific selection is passed explicitly as `playerName`, while player-roster validation and game setup remain in their existing startup flow. No runtime behavior or game logic changed.

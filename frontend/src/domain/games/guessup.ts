@@ -40,6 +40,23 @@ export interface GuessUpTeamTransition {
   readonly state: GuessUpRoundState
 }
 
+/**
+ * Resolve Team B's deck without another remote generation request when Team A
+ * already received a deck from the content-generation path. Reusing the same
+ * challenges keeps the teams comparable; an independently curated Team B deck
+ * always takes priority.
+ */
+export function resolveGuessUpTeamBDeck<T>(
+  teamADeck: readonly T[],
+  teamBDeck: readonly T[],
+  teamADeckFromGeneration: boolean,
+  shuffle: (items: readonly T[]) => T[],
+): T[] {
+  if (teamBDeck.length > 0) return [...teamBDeck]
+  if (!teamADeckFromGeneration || teamADeck.length === 0) return []
+  return shuffle(teamADeck)
+}
+
 const VALID_DURATIONS = new Set([30, 45, 60, 90, 120])
 
 /** Create a two-team round with an optional, explicit player assignment. */
