@@ -1700,7 +1700,19 @@ export default function AppShell({ initialState, initialRevision, initialPersist
       </form>}
     </dialog>}
     {launch && <div className={`launch-splash ${GAMES.find(game => game.id === launch.game)?.color ?? ''}`} style={{ left: launch.x, top: launch.y }} aria-hidden="true" />}
-    <footer className="app-footer"><span className="footer-brand"><img src="/king-fun-logo.svg" width="16" height="16" alt="" aria-hidden="true" /> KING-FUN</span></footer>
+    <footer className="app-footer">
+      <span className="footer-brand"><img src="/king-fun-logo.svg" width="16" height="16" alt="" aria-hidden="true" /> KING-FUN</span>
+      <nav className="footer-links" aria-label="Project links">
+        <a className="footer-link" href="https://something-bice-rho.vercel.app/about" target="_blank" rel="noopener noreferrer" aria-label="About us (opens in a new tab)">
+          <Icon name="info" size={16} />
+          <span>About us</span>
+        </a>
+        <a className="footer-link" href="https://github.com/thrkingunknown/king-fun" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository (opens in a new tab)">
+          <Icon name="github" size={16} />
+          <span>GitHub</span>
+        </a>
+      </nav>
+    </footer>
     {commandOpen && <Suspense fallback={null}><CommandPalette
       open={true}
       games={GAMES}

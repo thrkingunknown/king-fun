@@ -1,3 +1,4 @@
+import type { ReactNode, SVGProps } from 'react'
 import {
   Accessibility,
   Activity,
@@ -42,6 +43,7 @@ import {
   HeartHandshake,
   History,
   Home,
+  Info,
   Keyboard,
   KeyRound,
   Layers3,
@@ -100,7 +102,6 @@ import {
   X,
   Zap,
   type LucideIcon,
-  type LucideProps,
 } from 'lucide-react'
 
 /**
@@ -113,8 +114,8 @@ export type IconName =
   | 'badge-check' | 'badge-question-mark' | 'ban' | 'bomb' | 'book-open' | 'case-upper'
   | 'check' | 'check-circle' | 'chevron-down' | 'chevron-right' | 'circle-off' | 'help'
   | 'clock' | 'cloud' | 'database' | 'dices' | 'dice' | 'download' | 'drama' | 'external-link'
-  | 'file-text' | 'flag' | 'flame' | 'gamepad' | 'git-branch' | 'grip' | 'hand' | 'hat-glasses'
-  | 'history' | 'heart' | 'heart-handshake' | 'home' | 'keyboard'
+  | 'file-text' | 'flag' | 'flame' | 'gamepad' | 'git-branch' | 'github' | 'grip' | 'hand' | 'hat-glasses'
+  | 'history' | 'heart' | 'heart-handshake' | 'home' | 'info' | 'keyboard'
   | 'laugh' | 'lightbulb' | 'list-ordered' | 'lock' | 'key' | 'layers' | 'library' | 'menu'
   | 'message-circle-question' | 'messages-square' | 'minus' | 'moon' | 'moon-star'
   | 'more' | 'music' | 'orbit' | 'palette' | 'pause' | 'edit' | 'play' | 'plus' | 'puzzle'
@@ -123,9 +124,30 @@ export type IconName =
   | 'sun' | 'swords' | 'target' | 'timer' | 'timer-reset' | 'trash' | 'trophy'
   | 'thumbs-up' | 'upload' | 'users' | 'venetian-mask' | 'vibrate' | 'vote' | 'volume' | 'wallet' | 'wand-sparkles' | 'wifi' | 'x' | 'zap'
 
-type Props = Omit<LucideProps, 'ref'> & { name: IconName; size?: number; strokeWidth?: number }
+type Props = Omit<SVGProps<SVGSVGElement>, 'ref'> & { name: IconName; size?: number; strokeWidth?: number }
 
-const ICONS: Record<IconName, LucideIcon> = {
+function GitHubMark({ size = 18, strokeWidth = 1.8, ...props }: Omit<Props, 'name'>): ReactNode {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4" />
+      <path d="M9 18c-4.51 2-5-2-7-2" />
+    </svg>
+  )
+}
+
+const ICONS: Partial<Record<IconName, LucideIcon>> = {
   accessibility: Accessibility,
   activity: Activity,
   'alert-triangle': AlertTriangle,
@@ -169,6 +191,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   heart: Heart,
   'heart-handshake': HeartHandshake,
   home: Home,
+  info: Info,
   keyboard: Keyboard,
   key: KeyRound,
   layers: Layers3,
@@ -229,6 +252,8 @@ const ICONS: Record<IconName, LucideIcon> = {
 }
 
 export function Icon({ name, size = 18, strokeWidth = 1.8, ...props }: Props) {
+  if (name === 'github') return <>{GitHubMark({ size, strokeWidth, ...props })}</>
   const Component = ICONS[name]
-  return <Component size={size} strokeWidth={strokeWidth} aria-hidden="true" focusable="false" {...props} />
+  if (!Component) return null
+  return <Component size={size} strokeWidth={strokeWidth} aria-hidden="true" focusable="false" {...(props as Record<string, unknown>)} />
 }
