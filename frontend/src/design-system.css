@@ -109,7 +109,7 @@
   .topbar-inner{gap:6px;}
   .brand{gap:5px;flex:0 1 auto;min-width:0;}
   .brand-logo-wrap{width:30px;height:30px;}
-  .brand-logo{width:24px;height:24px;}
+  .brand-logo{width:24px;height:24px;object-fit:contain;object-position:center;}
   .brand-name{font-size:11px;letter-spacing:.04em;}
   .primary-nav{flex:0 0 auto;gap:1px;padding:2px;}
   .primary-nav-link{width:30px;min-width:30px;flex:0 0 30px;padding:0;}

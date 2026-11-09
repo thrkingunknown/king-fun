@@ -210,7 +210,7 @@ function localCuratedFallback(input: { game: AiGame; itemKind: AiItemKind; categ
   const matching = SEEDED_CONTENT.filter(item =>
     item.gameId === input.game
     && item.kind === kindMap[itemKind]
-    && item.categoryId === input.categoryId
+    && (item.categoryId === input.categoryId || item.packId === input.categoryId)
     && item.locale === locale
     && (input.suitability ? item.suitability === input.suitability : item.suitability === 'general')
     && !recent.has(item.text.normalize('NFKC').trim().toLocaleLowerCase(locale)),
@@ -224,7 +224,7 @@ function localCuratedFallback(input: { game: AiGame; itemKind: AiItemKind; categ
   )
   const selected = secureShuffle(matching.length ? matching : sameGameFallback).slice(0, Math.min(5, Math.max(1, input.count ?? 5)))
   if (!selected.length && input.game === 'imposter' && input.itemKind === 'word') {
-    throw new Error(`${reason} Built-in and API-created Imposter categories require the provider pipeline; no bundled word bank is used. Reconnect or restore provider availability, or select a locally authored/imported word pack.`)
+    throw new Error(`${reason} No unused Imposter words are available locally. Reconnect to generate fresh words, or reset recent content history.`)
   }
   if (!selected.length) throw new Error(`${reason} Content generation is unavailable right now. Retry when the API is reachable.`)
   return {
