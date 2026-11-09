@@ -69,6 +69,12 @@ test.describe('KING-FUN responsive experience', () => {
       }
       await expect(page.getByRole('button', { name: /^Start game/i }).first()).toBeEnabled()
       await page.getByRole('button', { name: /^Start game/i }).first().click()
+      const loadingOverlay = page.locator('.game-loading-layer')
+      await expect(loadingOverlay, `${game.name} should display the shared startup overlay`).toBeVisible({ timeout: 3_000 })
+      await expect(loadingOverlay).toHaveAttribute('aria-label', `Starting ${game.name}`)
+      if (game.name === 'Timer Impostor') {
+        await expect(loadingOverlay).not.toContainText(/Generating with (Gemini|Groq|Cloudflare)/)
+      }
       await expect(page.locator('.party-stage')).toBeVisible({ timeout: 8_000 })
       await expect(page.locator('.party-stage h1, .party-stage h2').first()).toBeVisible()
     }
@@ -141,6 +147,48 @@ test.describe('KING-FUN responsive experience', () => {
     await expect(page.locator('.party-stage-heading p')).not.toHaveText(firstPrompt ?? '')
   })
 
+  test('I Have Never shows live startup progress until its opening statement is ready', async ({ page }) => {
+    await page.route('**/v1/content/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ blocked: [] }) }))
+    await page.route('**/v1/content/generate', async route => {
+      const requestBody = route.request().postDataJSON() as Record<string, unknown>
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          requestId: requestBody.requestId,
+          provider: 'cloudflare-workers-ai',
+          cacheHit: false,
+          items: [{
+            id: 'e2e-never-have-i-ever-opening',
+            text: 'Never have I ever missed a train.',
+            categoryId: requestBody.categoryId,
+            kind: 'statement',
+            locale: 'en',
+            suitability: 'general',
+          }],
+        }),
+      })
+    })
+    await page.goto('/')
+    await page.getByRole('button', { name: /I Have Never/i }).click()
+    // Spin-wheel mode deliberately waits until a player has been selected
+    // before drawing their private prompt. Choose one-at-a-time to exercise
+    // the initial-prompt-during-startup path tested below.
+    const oneAtATime = page.getByRole('button', { name: /One at a time/i })
+    await oneAtATime.click()
+    await expect(oneAtATime).toHaveAttribute('aria-pressed', 'true')
+    const generationRequest = page.waitForRequest(request =>
+      request.method() === 'POST' && request.url().includes('/v1/content/generate'),
+      { timeout: 10_000 },
+    )
+    await page.getByRole('button', { name: /^Start game/i }).click()
+    const loadingOverlay = page.locator('.game-loading-layer')
+    await expect(loadingOverlay).toBeVisible({ timeout: 3_000 })
+    await generationRequest
+    await expect(loadingOverlay).toContainText('Opening statement ready', { timeout: 8_000 })
+    await expect(page.getByRole('heading', { name: /statement 1/i })).toBeVisible({ timeout: 8_000 })
+  })
+
   test('Who Am I keeps the forehead identity visible during yes/no play', async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: /Who Am I/i }).click()
@@ -189,22 +237,35 @@ test.describe('KING-FUN responsive experience', () => {
       const requestBody = route.request().postDataJSON() as Record<string, unknown>
       generationRequest = requestBody
       const categoryId = String(requestBody.categoryId)
+      const provider = route.request().headers()['x-provider-id'] ?? 'cloudflare-workers-ai'
+      const resultBody = {
+        requestId: requestBody.requestId,
+        provider,
+        cacheHit: false,
+        items: generatedWords.map((word, index) => ({
+          id: `e2e-imposter-${index + 1}`,
+          text: word,
+          categoryId,
+          kind: 'word',
+          locale: 'en',
+          hints: wordHints,
+        })),
+      }
+      const progressFrames = [
+        { type: 'progress', stage: 'gateway-accepted' },
+        { type: 'progress', stage: 'vault-checking', detail: 'Searching the approved category pool.' },
+        { type: 'progress', stage: 'vault-miss', detail: 'No approved category batch was found.' },
+        { type: 'progress', stage: 'provider-starting', provider, detail: `Generating with ${provider}.` },
+        { type: 'progress', stage: 'provider-generated', provider, detail: 'Provider output passed server validation.' },
+        { type: 'progress', stage: 'vault-saving', detail: 'Saving the validated batch.' },
+        { type: 'progress', stage: 'vault-saved', detail: 'The validated batch was saved to the shared content vault.' },
+        { type: 'progress', stage: 'content-ready', provider, detail: 'Validated content is ready.' },
+        { type: 'result', status: 200, body: resultBody },
+      ]
       await route.fulfill({
         status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          requestId: requestBody.requestId,
-          provider: 'cloudflare-workers-ai',
-          cacheHit: false,
-          items: generatedWords.map((word, index) => ({
-            id: `e2e-imposter-${index + 1}`,
-            text: word,
-            categoryId,
-            kind: 'word',
-            locale: 'en',
-            hints: wordHints,
-          })),
-        }),
+        contentType: 'application/x-ndjson; charset=utf-8',
+        body: `${progressFrames.map(frame => JSON.stringify(frame)).join('\n')}\n`,
       })
     })
 
@@ -244,8 +305,14 @@ test.describe('KING-FUN responsive experience', () => {
       { timeout: 10_000 },
     )
     await page.getByRole('button', { name: /^Start game/i }).click()
+    const loadingOverlay = page.locator('.game-loading-layer')
+    await expect(loadingOverlay).toBeVisible({ timeout: 3_000 })
     const generationRequestObserved = await generationRequestPromise
     expect(generationRequestObserved.url()).toContain('/v1/content/generate')
+    await expect(loadingOverlay).toContainText('No matching content in the vault')
+    await expect(loadingOverlay).toContainText(/generated content/i)
+    await expect(loadingOverlay).toContainText('Validated content saved to vault')
+    await expect(loadingOverlay).toContainText(/Content ready from/)
     const roleCard = page.locator('#imposter-role-reveal')
     await expect(roleCard).toBeVisible({ timeout: 10_000 })
     expect(generationRequest).toMatchObject({
@@ -271,6 +338,7 @@ test.describe('KING-FUN responsive experience', () => {
     await page.goto('/')
     await page.getByRole('button', { name: /Truth or Dare/ }).click()
     await page.getByRole('button', { name: /^Start game/i }).click()
+    await expect(page.locator('.game-loading-layer')).toBeVisible({ timeout: 3_000 })
     await expect(page.locator('.player-selection-wheel .spin-wheel')).toBeVisible()
     await page.getByRole('button', { name: /spin for a player/i }).click()
     await expect(page.getByRole('button', { name: /spin for truth or dare/i })).toBeVisible({ timeout: 8_000 })
@@ -347,6 +415,7 @@ test.describe('KING-FUN responsive experience', () => {
     await page.goto('/')
     await page.getByRole('button', { name: /GuessUp/ }).click()
     await page.getByRole('button', { name: /^Start game/i }).click()
+    await expect(page.locator('.game-loading-layer')).toBeVisible({ timeout: 3_000 })
     const teamLine = page.locator('.guess-team-line')
     await expect(teamLine).toBeVisible({ timeout: 8_000 })
     const teams = teamLine.locator(':scope > span')

@@ -126,6 +126,9 @@ The current implementation adds `src/domain/shared/validation.test.ts`, `src/dom
 
 ### Imposter
 
+- The shared startup overlay appears for every game Start path, displays the selected `GameMark`, respects reduced motion, and remains visible until the local session is ready. The Imposter generation E2E responds with NDJSON progress frames and asserts content-vault lookup, provider generation, validated-content save, and ready states are visible before gameplay.
+- Backend route tests verify that `Accept: application/x-ndjson` streams ordered progress frames followed by a final status/body frame, while ordinary clients retain the existing JSON response contract.
+
 - The role-reveal browser regression stubs `/api/v1/content/generate` with a schema-shaped five-word batch and asserts that the selected built-in category title/description reach the provider pipeline. This keeps the reveal test deterministic without restoring a bundled word bank or depending on a live provider/backend.
 
 - **TEST-IMP-001:** valid player roster starts a round; invalid roster is rejected.
@@ -812,3 +815,25 @@ The service-worker shell cache is now `king-fun-shell-v8` because the applicatio
 - The release-contract audit verifies `.env.example` exists and is safe, but now handles an absent file as an ordinary failed contract instead of an uncaught filesystem exception.
 - The Imposter browser test waits for the lazily loaded category list, confirms at least the 31 built-in categories are present, selects one category deterministically, mocks the content-generation response using the request category ID, and verifies the selected title and non-empty description are transmitted.
 - The browser test does not hardcode a particular built-in category title or description, so catalogue copy changes cannot break an unrelated private role-reveal interaction test.
+
+- The 23-game controller launch sweep asserts that every Start action shows the shared loading overlay and checks that the local rules-only Timer Impostor path does not claim an AI provider is running. I Have Never separately verifies that its first statement is prepared before gameplay opens. Only the current startup stage is announced as a live region; the event history is not re-announced on every update.
+
+- Generation progress must not claim a vault write when the vault is disabled or during a live provider connection test; configured writes report a distinct confirmed-save or save-failed event. A failed optional cache write does not discard valid generated content.
+
+
+## Android release packaging acceptance
+
+- **TEST-ANDROID-SIGN-001:** Missing any Android keystore secret fails the release signing step before Gradle builds; no unsigned release is published.
+- **TEST-ANDROID-SIGN-002:** The generated keystore is opened with the configured store password and alias; the release Gradle variant uses the configured key password/store password, while debug configuration remains unchanged.
+- **TEST-ANDROID-SIGN-003:** Running the signing configurator twice is idempotent and does not duplicate the Gradle signing block.
+- **TEST-ANDROID-SIGN-004:** Every published release APK passes `apksigner verify`; every published final release app AAB passes `jarsigner -verify`; each artifact certificate fingerprint matches the configured release keystore; unsigned APKs and intermediary AABs are not staged.
+- **TEST-ANDROID-SIGN-005:** Rerunning an existing release tag deletes prior APK/AAB assets before upload so unsigned or incorrectly signed artifacts from an earlier run cannot remain downloadable beside the verified packages.
+- **TEST-ANDROID-ICON-001:** After `tauri android init`, `tauri icon frontend/public/king-fun-logo-source.svg` refreshes `ic_launcher.png`, `ic_launcher_round.png`, and `ic_launcher_foreground.png` for mdpi, hdpi, xhdpi, xxhdpi, and xxxhdpi.
+- **TEST-ANDROID-DEVICE-001:** Install the signed release APK on a physical device; confirm install succeeds, launcher/app-info icons use KING-FUN artwork, and a later release signed with the same key updates the installed package.
+
+## Startup overlay regressions (2026-11-09)
+
+- The shared overlay must expose `aria-label="Starting {game name}"`, `role=region`, and its busy state.
+- The overlay retains up to twelve startup events, including confirmed content-vault writes, until the final handoff.
+- I Have Never startup tests must select One at a time when asserting an opening statement before gameplay. Spin-wheel mode intentionally defers prompt selection until a player is selected.
+- I Have Never provider generation is mocked with a deterministic, schema-shaped response; tests do not depend on a live provider.

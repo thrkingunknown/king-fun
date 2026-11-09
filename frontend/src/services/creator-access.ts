@@ -109,18 +109,43 @@ export async function loadModerationQueue(): Promise<ModerationQueueItem[]> {
 }
 
 
-export async function loadBlockedContentIds(ids: readonly string[]): Promise<string[]> {
+export type ContentStatusProgress = {
+  stage: 'checking' | 'received' | 'unavailable'
+  batch: number
+  totalBatches: number
+  checkedItems: number
+  totalItems: number
+  detail?: string
+}
+
+export async function loadBlockedContentIds(
+  ids: readonly string[],
+  onProgress?: (event: ContentStatusProgress) => void,
+): Promise<string[]> {
   const blocked = new Set<string>()
+  const totalBatches = Math.ceil(ids.length / 300)
+  let checkedItems = 0
   for (let offset = 0; offset < ids.length; offset += 300) {
+    const batch = Math.floor(offset / 300) + 1
+    const batchIds = ids.slice(offset, offset + 300)
+    onProgress?.({ stage: 'checking', batch, totalBatches, checkedItems, totalItems: ids.length })
     try {
       const response = await apiFetch(`${getAiApiBase()}/v1/content/status`, {
         method: 'POST', cache: 'no-store', headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ ids: ids.slice(offset, offset + 300) }),
+        body: JSON.stringify({ ids: batchIds }),
       })
-      if (!response.ok) continue
+      if (!response.ok) {
+        onProgress?.({ stage: 'unavailable', batch, totalBatches, checkedItems, totalItems: ids.length, detail: `The backend content-status request returned HTTP ${response.status}; local eligibility checks will continue.` })
+        continue
+      }
       const body = await response.json() as { blocked?: string[] }
       for (const id of body.blocked ?? []) if (typeof id === 'string') blocked.add(id)
-    } catch { /* Offline play continues with the local content catalogue. */ }
+      checkedItems += batchIds.length
+      onProgress?.({ stage: 'received', batch, totalBatches, checkedItems, totalItems: ids.length, detail: `Received moderation status for ${checkedItems} of ${ids.length} local content items.` })
+    } catch {
+      onProgress?.({ stage: 'unavailable', batch, totalBatches, checkedItems, totalItems: ids.length, detail: 'The backend content-status endpoint could not be reached; local eligibility checks will continue.' })
+      // Offline play continues with the local content catalogue.
+    }
   }
   return [...blocked]
 }

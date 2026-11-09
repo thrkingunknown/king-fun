@@ -105,6 +105,7 @@ The complete user-supplied Mystery Who report is the local gameplay source of tr
 | FR-AI-011 | The public API MUST validate payloads/providers and enforce abuse/cost controls. | HTTPS, exact CORS allowlist, streamed body/output bounds, timeouts, shared-store per-client/global/provider request caps, concurrency, secret-handling tests, and an emergency AI kill switch are implemented in source; production billing controls and deployed-instance verification remain required. |
 | FR-AI-012 | The model MUST receive only the recent queue for the requested game/category/item kind and be instructed to avoid repeats. | A batch of five original items is requested; app/server validation—not the prompt alone—enforces uniqueness and schema. |
 | FR-AI-013 | Provider/model IDs and generation parameters MUST be revalidated against current official docs before deployment. | No volatile model ID, quota, price, or free-tier promise is hardcoded in UI or requirements. |
+| FR-UX-005 | Every game start MUST show a shared, game-specific loading view until the session is ready or startup fails. | The view animates the selected game's identity, respects reduced motion, and lists local preparation/save steps plus only real backend, content-vault, provider, fallback, validation, and error events. Provider activity is streamed from the gateway; local-only games never display fictional network/model activity. |
 
 
 ### 2.8 Video-derived gameplay and animation requirements

@@ -184,18 +184,23 @@ jobs:
             sleep $((attempt * 15))
           done
           exit 1
-      - name: Restore Android signing keystore
-        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
+      - name: Generate KING-FUN Android launcher icons
         shell: bash
         run: |
-          mkdir -p src-tauri/gen/android
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/king-fun-upload.jks"
-          cat > src-tauri/gen/android/keystore.properties <<EOF
-          storeFile=$RUNNER_TEMP/king-fun-upload.jks
-          storePassword=$ANDROID_KEYSTORE_PASSWORD
-          keyAlias=$ANDROID_KEY_ALIAS
-          keyPassword=$ANDROID_KEY_PASSWORD
-          EOF
+          bun run tauri icon frontend/public/king-fun-logo-source.svg
+          resource_dir=src-tauri/gen/android/app/src/main/res
+          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            for icon in ic_launcher.png ic_launcher_round.png ic_launcher_foreground.png; do
+              file="$resource_dir/mipmap-$density/$icon"
+              if [ ! -s "$file" ]; then
+                echo "::error::Tauri icon generation did not create $file"
+                exit 1
+              fi
+            done
+          done
+      - name: Configure and validate Android release signing
+        shell: bash
+        run: bun run scripts/configure-android-release-signing.mjs
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -210,6 +215,113 @@ jobs:
             sleep 20
           done
           exit 1
+      - name: Verify signatures and stage installable Android artifacts
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          release_dir=release-artifacts
+          mkdir -p "$release_dir"
+          keystore="$RUNNER_TEMP/king-fun-upload-keystore.jks"
+          if [ ! -s "$keystore" ]; then
+            echo "::error::The validated Android release keystore is missing from the runner temp directory."
+            exit 1
+          fi
+          expected_fingerprint=$(keytool -list -v -keystore "$keystore" -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$ANDROID_KEY_ALIAS" 2>/dev/null | awk '/SHA256:/ { gsub(/:/, "", $2); print tolower($2); exit }')
+          if [ -z "$expected_fingerprint" ]; then
+            echo "::error::Could not read the configured release certificate SHA-256 fingerprint."
+            exit 1
+          fi
+
+          apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          if [ ! -x "$apksigner" ]; then
+            echo "::error::Android apksigner was not installed at the expected build-tools path."
+            exit 1
+          fi
+
+          apk_count=0
+          while IFS= read -r -d '' apk; do
+            echo "Verifying APK signature and release-certificate identity: $(basename "$apk")"
+            apk_verify_log=$("$apksigner" verify --verbose --print-certs "$apk" 2>&1) || {
+              printf '%s\n' "$apk_verify_log"
+              echo "::error::APK signature verification failed."
+              exit 1
+            }
+            printf '%s\n' "$apk_verify_log"
+            apk_fingerprint=$(awk '/Signer #1 certificate SHA-256 digest:/ { print tolower($NF); exit }' <<<"$apk_verify_log")
+            if [ -z "$apk_fingerprint" ] || [ "$apk_fingerprint" != "$expected_fingerprint" ]; then
+              echo "::error::APK was not signed with the configured KING-FUN release key."
+              exit 1
+            fi
+            cp "$apk" "$release_dir/KING-FUN-${RELEASE_TAG}-$(basename "$apk")"
+            apk_count=$((apk_count + 1))
+          done < <(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*-release.apk' ! -name '*-unsigned.apk' -print0 2>/dev/null | sort -z)
+
+          if [ "$apk_count" -eq 0 ]; then
+            echo "::error::No signed APK was produced. Unsigned APKs are deliberately excluded from GitHub Releases."
+            find src-tauri/gen/android/app/build/outputs -type f -name '*.apk' -print || true
+            exit 1
+          fi
+
+          aab_count=0
+          while IFS= read -r -d '' bundle; do
+            echo "Verifying AAB signature: $(basename "$bundle")"
+            verify_log=$(jarsigner -verify -verbose "$bundle" 2>&1) || {
+              printf '%s\n' "$verify_log"
+              echo "::error::AAB signature verification failed."
+              exit 1
+            }
+            if ! grep -qi 'jar verified' <<<"$verify_log" || grep -qi 'jar is unsigned' <<<"$verify_log"; then
+              printf '%s\n' "$verify_log"
+              echo "::error::AAB is not signed; refusing to publish it."
+              exit 1
+            fi
+            aab_fingerprint=$(keytool -printcert -jarfile "$bundle" 2>/dev/null | awk '/SHA256:/ { gsub(/:/, "", $2); print tolower($2); exit }')
+            if [ -z "$aab_fingerprint" ] || [ "$aab_fingerprint" != "$expected_fingerprint" ]; then
+              echo "::error::AAB was not signed with the configured KING-FUN release key."
+              exit 1
+            fi
+            cp "$bundle" "$release_dir/KING-FUN-${RELEASE_TAG}-$(basename "$bundle")"
+            aab_count=$((aab_count + 1))
+          done < <(find src-tauri/gen/android/app/build/outputs/bundle -type f -name '*release*.aab' ! -iname '*intermediary*' -print0 2>/dev/null | sort -z)
+
+          if [ "$aab_count" -eq 0 ]; then
+            echo "::error::No signed application AAB was produced."
+            find src-tauri/gen/android/app/build/outputs -type f -name '*.aab' -print || true
+            exit 1
+          fi
+
+          {
+            echo '### Verified Android release artifacts'
+            echo
+            echo "- Signed APKs: $apk_count"
+            echo "- Signed AABs: $aab_count"
+            echo '- Unsigned APKs and intermediary bundles are excluded.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          ls -lh "$release_dir"
+      - name: Remove stale APK/AAB assets from an existing release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          asset_list="$RUNNER_TEMP/${RELEASE_TAG//[^A-Za-z0-9._-]/_}-existing-assets.txt"
+          if gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > "$asset_list" 2>/dev/null; then
+            while IFS= read -r asset; do
+              case "$asset" in
+                *.apk|*.aab)
+                  echo "Removing previously published Android package before replacing it with verified artifacts: $asset"
+                  gh release delete-asset "$RELEASE_TAG" "$asset" --yes
+                  ;;
+              esac
+            done < "$asset_list"
+          else
+            echo "No existing GitHub Release assets to clean for $RELEASE_TAG."
+          fi
       - name: Publish Android artifacts to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -217,10 +329,6 @@ jobs:
           name: ${{ needs.prepare.outputs.name }}
           draft: ${{ needs.prepare.outputs.draft }}
           prerelease: ${{ needs.prepare.outputs.prerelease }}
-          files: |
-            src-tauri/gen/android/**/outputs/**/*.apk
-            src-tauri/gen/android/**/outputs/**/*.aab
-            src-tauri/gen/android/**/*.apk
-            src-tauri/gen/android/**/*.aab
+          files: release-artifacts/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

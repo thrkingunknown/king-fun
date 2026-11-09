@@ -73,6 +73,16 @@ The latest user-machine baseline had all 188 unit/contracts, semantic typechecks
 - [x] Adaptive player/category windows and isolated per-game/category/item-kind content queues are implemented and have regression coverage. (`FR-CONTENT-003` through `FR-CONTENT-008`)
 - [x] Committed role/prompt/wheel/deck/timer outcomes are stored in active snapshots; browser reload verification remains pending.
 
+## Android release packaging hardening
+
+- [x] Android release signing requires all four keystore secrets and fails closed when any are missing or invalid.
+- [x] Generated Android Gradle release variant is configured to use the validated release signing key; debug signing remains unchanged.
+- [x] Canonical KING-FUN launcher icons are regenerated after Android project initialization for all mipmap densities.
+- [x] GitHub Release staging verifies APK/AAB signatures and excludes unsigned APKs/intermediary bundles.
+- [x] Regular Android CI build artifact is labelled unsigned and is not presented as an installable release.
+- [ ] Run the manual GitHub release workflow with production keystore secrets; verify uploaded APK with `apksigner verify --verbose --print-certs`.
+- [ ] Install the signed APK on a physical Android device and verify the KING-FUN launcher icon, app updates using the same signing key, and package ID.
+
 ## 3A. Mystery Who report implementation status
 
 - [x] Read and use the complete supplied local gameplay report; online mode excluded.
@@ -476,3 +486,31 @@ The latest user-machine baseline had all 188 unit/contracts, semantic typechecks
 - [x] Add source and Bun regression assertions for the renderer boundary and context type.
 - [ ] Rerun native Bun 1.4.4 `check` on the exact updated tree; require zero frontend/backend lint warnings, both workspace typechecks, all unit tests, security audit, Vite build and artifact-budget checks to pass.
 - [ ] Rerun all 20 Playwright/axe tests on the exact updated tree. The prior user log passed 20/20 before this source-only renderer lifecycle change.
+
+
+## 2026-11-08 — Shared live game-start loading experience
+
+- [x] Add a shared game-specific loading overlay to the common start/restart flow for all 27 games.
+- [x] Show real local preparation, content eligibility, game setup and IndexedDB commit stages; do not fabricate provider/network events for local-only games.
+- [x] Stream backend content-vault lookup, cache result, provider start/success/failure, vault save and content-ready events as NDJSON when requested; preserve the default JSON API contract.
+- [x] Wire provider-order skips and fallbacks (Gemini, Groq, Cloudflare Workers AI, local content) into the live startup event log.
+- [x] Include first Never Have I Ever prompt selection in startup so its generation work is visible before entering the game.
+- [x] Add reduced-motion-aware, game-mark-specific animation and browser/backend regression coverage.
+- [ ] Run Bun 1.4.4 lint, semantic typechecks, unit tests, dependency audit, production build and Playwright/axe on this exact revision.
+
+- [x] Extend the 23-game browser launch sweep to assert the shared loader for every added game and assert no fabricated provider activity for a rules-only game.
+- [x] Cover I Have Never opening-statement readiness in the startup overlay.
+- [x] Scope accessible live announcements to the current status; keep history available without repeated announcements.
+
+
+## Android release signing and launcher icon acceptance
+
+- [x] Make GitHub release signing mandatory and pass all four Android signing secrets directly to the signing configuration step.
+- [x] Validate keystore bytes, store password, alias, and private-key password before building; keep keystore/properties on the ephemeral runner only.
+- [x] Configure Gradle's release signing config and preserve the debug variant.
+- [x] Regenerate the native Android launcher assets from the canonical KING-FUN crown-and-dice artwork after Android project initialization.
+- [x] Verify every release APK/AAB signature and require its certificate fingerprint to match the configured release key.
+- [x] Exclude unsigned APKs and intermediary AABs; remove old APK/AAB assets when rerunning a release tag.
+- [ ] Run the manual Android release workflow with the existing repository secrets and inspect the verified artifact summary.
+- [ ] Install the signed APK on a physical Android device and confirm installation and launcher/app-info icon artwork.
+- [ ] Confirm a subsequent signed release using the same keystore updates the installed app without signature mismatch.

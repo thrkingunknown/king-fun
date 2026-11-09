@@ -9,6 +9,16 @@ export type AiGame =
   | 'qupid' | 'questions-for-love' | 'a-or-b' | 'reverse-singing'
 export type AiGeneratedItem = { id: string; text: string; categoryId: string; kind: AiItemKind; locale: string; hints?: string[]; description?: string; emoji?: string }
 export type AiGenerationProvider = AiProvider | 'local-curated' | 'content-vault'
+export type AiGenerationProgressEvent =
+  | { stage: 'gateway-connecting' | 'gateway-accepted' }
+  | { stage: 'vault-checking' | 'vault-hit' | 'vault-miss' | 'vault-waiting' | 'vault-busy' | 'vault-unavailable' | 'vault-skipped' | 'vault-saving' | 'vault-saved' | 'vault-save-failed'; detail?: string }
+  | { stage: 'provider-starting' | 'provider-succeeded'; provider: AiProvider; detail?: string }
+  | { stage: 'provider-failed'; provider: AiProvider; message: string }
+  | { stage: 'provider-skipped'; provider: AiProvider; message: string }
+  | { stage: 'provider-fallback'; from: AiProvider; to: AiProvider }
+  | { stage: 'local-fallback'; message: string }
+  | { stage: 'content-ready'; provider: AiGenerationProvider; detail?: string }
+export type AiGenerationProgressReporter = (event: AiGenerationProgressEvent) => void
 import { SEEDED_CONTENT } from '../content/seed.ts'
 import { secureShuffle } from '../domain/random/secure-random.ts'
 import { apiFetch } from './api-transport.ts'
@@ -91,6 +101,88 @@ async function readJsonResponse(response: Response): Promise<Record<string, unkn
   }
 }
 
+type GenerationApiResult = { status: number; body: Record<string, unknown> }
+type GenerationStreamFrame =
+  | { type: 'progress'; stage: string; provider?: AiProvider; detail?: string }
+  | { type: 'result'; status: number; body: unknown }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function reportBackendProgress(frame: GenerationStreamFrame, onProgress?: AiGenerationProgressReporter): void {
+  if (frame.type !== 'progress') return
+  const detail = typeof frame.detail === 'string' ? frame.detail : undefined
+  switch (frame.stage) {
+    case 'gateway-accepted': onProgress?.({ stage: 'gateway-accepted' }); break
+    case 'vault-checking': onProgress?.({ stage: 'vault-checking', ...(detail ? { detail } : {}) }); break
+    case 'vault-hit': onProgress?.({ stage: 'vault-hit', ...(detail ? { detail } : {}) }); break
+    case 'vault-miss': onProgress?.({ stage: 'vault-miss', ...(detail ? { detail } : {}) }); break
+    case 'vault-waiting': onProgress?.({ stage: 'vault-waiting', ...(detail ? { detail } : {}) }); break
+    case 'vault-busy': onProgress?.({ stage: 'vault-busy', ...(detail ? { detail } : {}) }); break
+    case 'vault-unavailable': onProgress?.({ stage: 'vault-unavailable', ...(detail ? { detail } : {}) }); break
+    case 'vault-skipped': onProgress?.({ stage: 'vault-skipped', ...(detail ? { detail } : {}) }); break
+    case 'vault-saving': onProgress?.({ stage: 'vault-saving', ...(detail ? { detail } : {}) }); break
+    case 'vault-saved': onProgress?.({ stage: 'vault-saved', ...(detail ? { detail } : {}) }); break
+    case 'vault-save-failed': onProgress?.({ stage: 'vault-save-failed', ...(detail ? { detail } : {}) }); break
+    case 'provider-starting':
+      if (frame.provider) onProgress?.({ stage: 'provider-starting', provider: frame.provider, ...(detail ? { detail } : {}) })
+      break
+    case 'provider-generated':
+      if (frame.provider) onProgress?.({ stage: 'provider-succeeded', provider: frame.provider, ...(detail ? { detail } : {}) })
+      break
+    case 'provider-failed':
+      if (frame.provider) onProgress?.({ stage: 'provider-failed', provider: frame.provider, message: detail ?? 'The provider request failed.' })
+      break
+    case 'content-ready':
+      onProgress?.({ stage: 'content-ready', provider: frame.provider ?? 'content-vault', ...(detail ? { detail } : {}) })
+      break
+  }
+}
+
+async function readGenerationApiResult(response: Response, onProgress?: AiGenerationProgressReporter): Promise<GenerationApiResult> {
+  if (!response.headers.get('content-type')?.toLowerCase().includes('application/x-ndjson')) {
+    return { status: response.status, body: await readJsonResponse(response) }
+  }
+
+  let buffer = ''
+  const result: { value: GenerationApiResult | null } = { value: null }
+  const consumeLine = (line: string) => {
+    const trimmed = line.trim()
+    if (!trimmed) return
+    const parsed: unknown = JSON.parse(trimmed)
+    if (!isRecord(parsed) || typeof parsed.type !== 'string') throw new Error('The generation gateway sent an invalid progress frame.')
+    if (parsed.type === 'progress') {
+      reportBackendProgress(parsed as unknown as GenerationStreamFrame, onProgress)
+    } else if (parsed.type === 'result' && typeof parsed.status === 'number') {
+      result.value = { status: parsed.status, body: isRecord(parsed.body) ? parsed.body : {} }
+    }
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    const raw = await response.text()
+    for (const line of raw.split('\n')) consumeLine(line)
+  } else {
+    const decoder = new TextDecoder()
+    try {
+      while (true) {
+        const chunk = await reader.read()
+        buffer += decoder.decode(chunk.value, { stream: !chunk.done })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) consumeLine(line)
+        if (chunk.done) break
+      }
+      if (buffer.trim()) consumeLine(buffer)
+    } finally {
+      reader.releaseLock()
+    }
+  }
+  if (!result.value) throw new Error('The generation gateway closed before returning a result.')
+  return result.value
+}
+
 export async function getAiBackendStatus(signal?: AbortSignal) {
   assertSecureTransport()
   const response = await apiFetch(`${apiBase}/v1/status`, { signal: signal ?? null, headers: { accept: 'application/json' }, cache: 'no-store' })
@@ -162,49 +254,110 @@ export type AiContentRequest = {
   adultMode?: boolean
 }
 
-export async function generateAiContent(input: AiContentRequest, signal?: AbortSignal) {
+export async function generateAiContent(
+  input: AiContentRequest,
+  signal?: AbortSignal,
+  onProgress?: AiGenerationProgressReporter,
+) {
   // adultMode: suitability === 'adult' is required for adult generation.
   const suitability = input.suitability ?? (input.adultMode ? 'adult' : 'general')
   const adultMode = suitability === 'adult' || input.adultMode === true
   const online = typeof navigator === 'undefined' ? true : navigator.onLine
   if (!online) {
     if (signal?.aborted) throw signal.reason ?? new DOMException('Generation cancelled.', 'AbortError')
-    return localCuratedFallback({ ...input, suitability }, 'No internet connection; using offline content.')
-
+    const message = 'No internet connection; checking local content.'
+    onProgress?.({ stage: 'local-fallback', message })
+    const fallback = localCuratedFallback({ ...input, suitability }, 'No internet connection; using offline content.')
+    onProgress?.({ stage: 'content-ready', provider: fallback.provider, detail: 'Offline content is ready.' })
+    return fallback
   }
+
   assertSecureTransport()
   // Use the configured provider order for every suitability. Cloudflare remains
   // the operator-managed fallback when no BYOK provider is configured.
   const providers: AiProvider[] = getAiProviderOrder()
   let lastError = 'No remote provider is available.'
+  let previousAttempt: AiProvider | null = null
+
   for (const provider of providers) {
-    if ((cooldownUntil[provider] ?? 0) > Date.now()) continue
+    if ((cooldownUntil[provider] ?? 0) > Date.now()) {
+      const remaining = Math.max(1, Math.ceil(((cooldownUntil[provider] ?? 0) - Date.now()) / 1000))
+      onProgress?.({ stage: 'provider-skipped', provider, message: `${provider} is cooling down after repeated failures (${remaining}s remaining).` })
+      continue
+    }
     const key = provider === 'cloudflare-workers-ai' ? undefined : keys[provider]
-    if (provider !== 'cloudflare-workers-ai' && !key) continue
+    if (provider !== 'cloudflare-workers-ai' && !key) {
+      onProgress?.({ stage: 'provider-skipped', provider, message: `${provider} is not enabled with a session key.` })
+      continue
+    }
+    if (previousAttempt && previousAttempt !== provider) onProgress?.({ stage: 'provider-fallback', from: previousAttempt, to: provider })
+    previousAttempt = provider
+    onProgress?.({ stage: 'gateway-connecting' })
+
     try {
-      const response = await apiFetch(`${apiBase}/v1/content/generate`, { method: 'POST', signal: signal ?? null, cache: 'no-store', headers: { 'content-type': 'application/json', 'x-provider-id': provider, ...(key ? { 'x-provider-key': key } : {}) }, body: JSON.stringify({ schemaVersion: 1, requestId: crypto.randomUUID(), game: input.game, itemKind: input.itemKind, categoryId: input.categoryId, ...(input.categoryName ? { categoryName: input.categoryName.slice(0, 120) } : {}), ...(input.categoryDescription ? { categoryDescription: input.categoryDescription.slice(0, 280) } : {}), locale: input.locale ?? 'en', suitability, adultMode, count: Math.min(5, Math.max(1, input.count ?? 5)), ...(input.playerCount ? { playerCount: input.playerCount } : {}), ...(input.playerNames?.length ? { playerNames: input.playerNames.slice(0, 32).map(name => name.trim().slice(0, 80)) } : {}), ...(input.currentTurnPlayerNames?.length ? { currentTurnPlayerNames: input.currentTurnPlayerNames.slice(0, 8).map(name => name.trim().slice(0, 80)).filter(Boolean) } : {}), recentItems: (input.recentItems ?? []).slice(-30) }) })
-      const body = await readJsonResponse(response) as { items?: AiGeneratedItem[]; cacheHit?: boolean; provider?: string; error?: { code?: string; message?: string; retryable?: boolean } }
-      if (!response.ok || !Array.isArray(body.items)) {
-        lastError = body.error?.message ?? `Provider request failed (${response.status}).`
+      const response = await apiFetch(`${apiBase}/v1/content/generate`, {
+        method: 'POST',
+        signal: signal ?? null,
+        cache: 'no-store',
+        headers: {
+          'accept': 'application/x-ndjson, application/json;q=0.9',
+          'content-type': 'application/json',
+          'x-provider-id': provider,
+          ...(key ? { 'x-provider-key': key } : {}),
+        },
+        body: JSON.stringify({
+          schemaVersion: 1,
+          requestId: crypto.randomUUID(),
+          game: input.game,
+          itemKind: input.itemKind,
+          categoryId: input.categoryId,
+          ...(input.categoryName ? { categoryName: input.categoryName.slice(0, 120) } : {}),
+          ...(input.categoryDescription ? { categoryDescription: input.categoryDescription.slice(0, 280) } : {}),
+          locale: input.locale ?? 'en',
+          suitability,
+          adultMode,
+          count: Math.min(5, Math.max(1, input.count ?? 5)),
+          ...(input.playerCount ? { playerCount: input.playerCount } : {}),
+          ...(input.playerNames?.length ? { playerNames: input.playerNames.slice(0, 32).map(name => name.trim().slice(0, 80)) } : {}),
+          ...(input.currentTurnPlayerNames?.length ? { currentTurnPlayerNames: input.currentTurnPlayerNames.slice(0, 8).map(name => name.trim().slice(0, 80)).filter(Boolean) } : {}),
+          recentItems: (input.recentItems ?? []).slice(-30),
+        }),
+      })
+      const { status: responseStatus, body } = await readGenerationApiResult(response, onProgress) as GenerationApiResult & { body: { items?: AiGeneratedItem[]; cacheHit?: boolean; provider?: string; error?: { code?: string; message?: string; retryable?: boolean } } }
+      if (responseStatus < 200 || responseStatus >= 300 || !Array.isArray(body.items)) {
+        lastError = body.error?.message ?? `Provider request failed (${responseStatus}).`
+        onProgress?.({ stage: 'provider-failed', provider, message: lastError })
         setAiProviderStatus(provider, lastError)
         failureCounts[provider] = (failureCounts[provider] ?? 0) + 1
         if (failureCounts[provider]! >= 3 && body.error?.retryable !== false) cooldownUntil[provider] = Date.now() + 30_000
-        if (body.error?.code === 'AUTH_INVALID') { if (provider !== 'cloudflare-workers-ai') preferences = { ...preferences, enabled: { ...preferences.enabled, [provider]: false } }; persist(); emit(); continue }
+        if (body.error?.code === 'AUTH_INVALID') {
+          if (provider !== 'cloudflare-workers-ai') preferences = { ...preferences, enabled: { ...preferences.enabled, [provider]: false } }
+          persist()
+          emit()
+        }
         continue
       }
-      failureCounts[provider] = 0; delete cooldownUntil[provider]
+      failureCounts[provider] = 0
+      delete cooldownUntil[provider]
       const resolvedProvider = body.cacheHit || body.provider === 'content-vault' ? 'content-vault' : provider
       setAiProviderStatus(provider, body.cacheHit ? 'Content vault hit — no provider request used' : 'Connected — generation succeeded')
+      if (resolvedProvider === 'content-vault') onProgress?.({ stage: 'vault-hit', detail: 'The backend returned an approved cached batch.' })
+      onProgress?.({ stage: 'content-ready', provider: resolvedProvider, detail: resolvedProvider === 'content-vault' ? 'Cached content is ready.' : 'Generated content is ready.' })
       return { provider: resolvedProvider as AiGenerationProvider, items: body.items, cacheHit: body.cacheHit === true }
     } catch (error) {
       if (signal?.aborted) throw error
       lastError = error instanceof Error ? error.message : 'Provider request failed.'
+      onProgress?.({ stage: 'provider-failed', provider, message: lastError })
       setAiProviderStatus(provider, lastError)
       failureCounts[provider] = (failureCounts[provider] ?? 0) + 1
       if (failureCounts[provider]! >= 3) cooldownUntil[provider] = Date.now() + 30_000
     }
   }
-  if (signal?.aborted) throw signal.reason ?? new DOMException('Generation cancelled.', 'AbortError')
-  return localCuratedFallback({ ...input, suitability }, `Remote generation unavailable: ${lastError}.`)
-}
 
+  if (signal?.aborted) throw signal.reason ?? new DOMException('Generation cancelled.', 'AbortError')
+  const fallbackMessage = `Remote generation unavailable: ${lastError}.`
+  onProgress?.({ stage: 'local-fallback', message: fallbackMessage })
+  const fallback = localCuratedFallback({ ...input, suitability }, fallbackMessage)
+  onProgress?.({ stage: 'content-ready', provider: fallback.provider, detail: 'Fallback content is ready.' })
+  return fallback
+}

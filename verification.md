@@ -1349,3 +1349,60 @@ Run `bun install --frozen-lockfile`, `bun run check`, and `bun run test:e2e` on 
 
 - Node release-contract audit: **159/159 passed** after the fix.
 - Bun and workspace dependencies are not installed in this authoring runtime. The full strict TypeScript project check, Bun tests, dependency audit, production build, and Playwright suite have not been rerun here; run them against this exact archive.
+
+
+# Verification update — live game-start loading experience (2026-11-08)
+
+## Implemented
+
+- Added `GameLoadingOverlay` to the single `startGame` path, covering all 27 games and Imposter restart. It uses the selected game's `GameMark`, a CSS orbit/pulse/progress animation, accessible live status text, and system/saved reduced-motion support.
+- Startup stages cover lazy local seed loading, content availability/moderation filtering, local rule preparation, initial Never Have I Ever prompt selection, durable session commit, and game-ready/error states. Local-only starts do not claim to contact the backend or an AI provider.
+- Startup generation calls pass the progress reporter to `generateAiContent`. It reports real provider skips, provider attempts, fallback order, local fallback and content-ready events.
+- The gateway supports opt-in `Accept: application/x-ndjson` progress streaming while preserving JSON for existing clients. It emits backend acceptance, content-vault check/hit/miss/wait/busy/unavailable/skipped, provider starting/generated/failed, confirmed vault-save success/failure and content-ready events.
+- E2E coverage supplies schema-shaped NDJSON progress frames and asserts the overlay displays the actual vault/provider/save/ready lifecycle. Backend route coverage verifies NDJSON framing and the final response envelope.
+
+## Verification boundary
+
+- Static source and syntax checks are to be rerun after the final archive is assembled.
+- This authoring runtime has no Bun executable or installed workspace dependencies, so native Bun lint/typecheck/unit tests, `bun audit`, Vite production build and Playwright/axe cannot be executed here. Do not treat this change as fully release-verified until those commands pass on the exact archive.
+
+## Additional loading-overlay coverage
+
+- Extended the 23-added-game browser launch sweep to assert the shared overlay for every Start action and to verify that Timer Impostor does not display a fabricated provider call.
+- Added an I Have Never browser assertion for opening-statement readiness during startup.
+- Changed accessibility live updates to announce only the current stage; the history remains readable but is not re-announced on every event.
+
+## Final static verification — live game-start loading UI
+
+- Node release-contract audit: **170/170 passed** in the working tree.
+- TypeScript/TSX syntax-only transpilation: **114 files, zero diagnostics** (global TypeScript; this is not semantic project typechecking).
+- MJS syntax checks and repository JSON parsing: rerun after the final source edits.
+- Playwright E2E was expanded to cover every added controller launch, I Have Never opening-prompt readiness, streamed provider/vault lifecycle, and no fabricated provider status for rules-only startup. The browser suite has **not** been executed in this authoring runtime.
+- Bun typecheck, unit tests, security audit and production build have **not** been executed in this authoring runtime because Bun and workspace dependencies are unavailable.
+
+- Added confirmed `vault-saved` and `vault-save-failed` progress stages; save activity is omitted when the vault is not configured and for live provider tests.
+
+
+## 2026-11-08 — Android release signing and launcher icon remediation
+
+- Inspected the supplied GitHub Release screenshot: its APK asset was named `app-universal-release-unsigned.apk`. The installer reported `INSTALL_PARSE_FAILED_NO_CERTIFICATES`, consistent with the APK containing no Android signing certificate.
+- Source audit identified the workflow defect: the restore step tested `env.ANDROID_KEYSTORE_BASE64` in its `if` expression even though that variable was only declared in the same step's `env` block. The condition therefore did not see the step-local secret. The step also wrote properties but did not configure Gradle's generated release `signingConfigs` / `buildTypes.release.signingConfig`, which Tauri's Android signing guide requires.
+- Added `scripts/configure-android-release-signing.mjs`: requires all four signing secrets, validates the decoded keystore and alias with `keytool`, writes a private `keystore.properties`, and idempotently configures Gradle release signing with separate store/key passwords. Debug signing is not modified.
+- Both Android workflows now run `tauri icon frontend/public/king-fun-logo-source.svg` after project initialization and verify all mipmap density resources. This updates `src-tauri/gen/android/app/src/main/res/` rather than relying on unused icon files under `src-tauri/icons/android/`.
+- The release workflow verifies APK signatures with `apksigner`, AAB signatures with `jarsigner`, compares every artifact certificate fingerprint with the configured keystore certificate, stages only release-signed app artifacts, excludes unsigned APK/intermediary bundle outputs, deletes stale APK/AAB files on an existing tag before republishing, and fails closed if signed app outputs are missing. Regular CI artifacts are explicitly named `tauri-android-ci-unsigned`.
+- Local verification: the signing script passed twice against a throwaway test JKS keystore and generated Gradle template, demonstrating store-password/alias/private-key-password validation, separate passwords, release-only signing configuration, and idempotency. A signed JAR smoke test verified that the release workflow’s `jarsigner` output check recognizes genuinely signed artifacts. `node scripts/check-release-contracts.mjs`: 180/180 passed. No real GitHub secrets were accessed; Android runner build, signature verification of produced artifacts, and physical-device installation remain to be verified in GitHub Actions.
+
+## 2026-11-09 — Backend dev entry-point correction
+
+- Fixed `backend/dev.ts` to import `{ app }` as a named export.
+- Exported the configured Elysia instance from `backend/index.ts`; the Vercel handler continues to use the same instance.
+- Added a release-contract check for the named import/export relationship.
+- Static verification in this environment: release-contract and syntax checks are run against the updated source. The full Bun typecheck, backend tests, audit and production build must still be executed in the pinned Bun workspace.
+
+## 2026-11-09 — E2E fixes from latest Playwright run
+
+- Fixed missing accessible name on `.game-loading-layer`.
+- Fixed the I Have Never test to choose One at a time; default spin-wheel mode correctly defers prompt generation until after a player is selected.
+- Added a deterministic mocked generation response for the opening statement.
+- Expanded visible startup history from six to twelve entries and added a short final-state handoff so vault-save and provider events can be read.
+- Added three release-contract checks for these regressions.

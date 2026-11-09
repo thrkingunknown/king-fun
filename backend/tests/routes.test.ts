@@ -28,6 +28,25 @@ describe('public API routes', () => {
     const invalid = await handle(new Request('https://king-fun.test/api/v1/content/generate', { method: 'POST', headers: { origin: 'http://localhost:5173', 'content-type': 'application/json', 'x-provider-id': 'gemini', 'x-provider-key': 'g'.repeat(32) }, body: '{' }))
     expect(invalid.status).toBe(400)
   })
+  test('streams ordered generation progress frames and a final result for loading UI clients', async () => {
+    const response = await handle(new Request('https://king-fun.test/api/v1/content/generate', {
+      method: 'POST',
+      headers: {
+        origin: 'http://localhost:5173',
+        accept: 'application/x-ndjson',
+        'content-type': 'application/json',
+        'x-provider-id': 'gemini',
+        'x-provider-key': 'g'.repeat(32),
+      },
+      body: '{',
+    }))
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('application/x-ndjson')
+    expect(response.headers.get('cache-control')).toContain('no-store')
+    const frames = (await response.text()).trim().split('\n').map(line => JSON.parse(line) as { type: string; stage?: string; status?: number })
+    expect(frames[0]).toMatchObject({ type: 'progress', stage: 'gateway-accepted' })
+    expect(frames.at(-1)).toMatchObject({ type: 'result', status: 400 })
+  })
 })
 
 

@@ -36,8 +36,11 @@ Test home, setup, gameplay, history, settings, dialogs, inputs, status banners, 
 | `SortableProviderRow` | Native HTML drag/drop + accessible Move up / Move down buttons | Pointer and keyboard provider reorder; direct named `role="switch"` grid item | Settings screen owns persisted order and enabled state |
 | `SpinWheel` | Shared CSS/conic-gradient renderer | Equal radial sectors, larger labels aligned to each spoke, pointer, hub and spin animation | Caller owns segment data, selected outcome, angle and persistence |
 | `CommandPalette` | cmdk inside native dialog | Keyboard-first navigation and game launch | Shell owns navigation and launch actions |
+| `GameLoadingOverlay` | First-party CSS animation + live activity log | Game-specific startup animation and accessible current-step/history display | App shell owns startup lifecycle; the gateway emits actual vault/provider/fallback progress; domain rules remain local |
 
 New game modes should compose shared components and add domain behavior in `frontend/src/domain/games/`. Do not copy wheel, prompt, dialog, status, settings-toggle, or player-list implementations into each screen.
+
+The app shell displays `GameLoadingOverlay` immediately after any game Start action and keeps it visible until the session snapshot is committed and the play screen is ready, or a startup error is shown. The overlay shows local catalogue/content checks, game-rule preparation, persistence, and only the real backend events received during content generation. The gateway's `/v1/content/generate` route supports an opt-in NDJSON response (`Accept: application/x-ndjson`) that emits content-vault lookup/hit/miss/wait, selected provider start/success/failure, and confirmed vault-save success/failure only when the shared vault is configured, followed by final content-ready frames before the result. Normal JSON clients remain supported. Provider fallback order is determined by the frontend provider orchestrator; no provider step is fabricated for local-only startup. The animation uses the selected `GameMark`, game-specific accent colours, and system/saved reduced-motion preferences.
 
 ## Package adoption policy
 

@@ -35,3 +35,4 @@ src-tauri/gen/
 tauri-updater.key
 tauri-updater.key.pub
 king-fun.jks
+node_modules

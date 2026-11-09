@@ -63,7 +63,198 @@ const supportedTasks = [
   'qupid:party-prompt', 'questions-for-love:party-prompt', 'a-or-b:party-prompt', 'reverse-singing:party-prompt',
 ]
 
-const app = new Elysia({ name: 'king-fun-api' })
+type GenerationProgress = {
+  stage: 'gateway-accepted' | 'vault-checking' | 'vault-hit' | 'vault-miss' | 'vault-waiting' | 'vault-busy' | 'vault-unavailable' | 'vault-skipped' | 'provider-starting' | 'provider-generated' | 'provider-failed' | 'vault-saving' | 'vault-saved' | 'vault-save-failed' | 'content-ready'
+  provider?: ProviderId
+  detail?: string
+}
+type GenerationProgressReporter = (event: GenerationProgress) => void
+type GenerationStreamFrame =
+  | ({ type: 'progress' } & GenerationProgress)
+  | { type: 'result'; status: number; body: unknown }
+
+function providerLabel(provider: ProviderId): string {
+  return provider === 'cloudflare-workers-ai' ? 'Cloudflare Workers AI' : provider === 'gemini' ? 'Gemini' : 'Groq'
+}
+
+async function handleContentGenerateRequest(
+  request: Request,
+  report: GenerationProgressReporter = () => undefined,
+  signal: AbortSignal = request.signal,
+): Promise<Response> {
+  const origin = request.headers.get('origin') ?? undefined
+  let slot: Awaited<ReturnType<typeof acquireGenerationSlotForAddress>> | undefined
+  let contentLock: string | null = null
+  let contentLockInput: ReturnType<typeof validateGenerateInput> | undefined
+  let activeProvider: ProviderId | undefined
+  let providerGenerationStarted = false
+  report({ stage: 'gateway-accepted' })
+
+  try {
+    if (env.NODE_ENV === 'production') {
+      const protocol = new URL(request.url).protocol
+      const forwardedProtocol = request.headers.get('x-forwarded-proto')
+      if (protocol !== 'https:' && forwardedProtocol !== 'https') throw new SafeProviderError('INVALID_REQUEST', 'HTTPS is required for production generation.', false, 400)
+      if (!origin || !allowedOrigins.has(origin)) throw new SafeProviderError('ORIGIN_NOT_ALLOWED', 'This origin is not allowed.', false, 403)
+    }
+    if (rejectOrigin(origin ?? null)) throw new SafeProviderError('ORIGIN_NOT_ALLOWED', 'This origin is not allowed.', false, 403)
+    if ((request.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase() !== 'application/json') {
+      throw new SafeProviderError('INVALID_REQUEST', 'Content-Type must be application/json.', false, 415)
+    }
+
+    const providerHeader = request.headers.get('x-provider-id')
+    if (!providerHeader || !allowedProviders.has(providerHeader as ProviderId)) throw new SafeProviderError('INVALID_REQUEST', 'Unsupported provider.', false, 400)
+    const provider = providerHeader as ProviderId
+    activeProvider = provider
+    const liveProviderTest = request.headers.get('x-provider-test') === 'true'
+    const sessionKey = request.headers.get('x-provider-key')?.trim() || undefined
+    const rawBody = await readBoundedText(request, maxBodyBytes)
+    let parsedBody: unknown
+    try { parsedBody = JSON.parse(rawBody) }
+    catch { throw new SafeProviderError('INVALID_REQUEST', 'Request body must be valid JSON.', false, 400) }
+    const input = validateGenerateInput(parsedBody)
+    if (input.suitability === 'adult' && input.adultMode !== true) throw new SafeProviderError('INVALID_REQUEST', 'Adult content requests require explicit 18+ mode.', false, 400)
+    contentLockInput = input
+    let generationInput = input
+
+    // Cache-first: a full, already validated content pool avoids provider calls and quota consumption.
+    if (!liveProviderTest && isContentVaultConfigured(env)) {
+      report({ stage: 'vault-checking', detail: 'Searching the shared content vault for an approved matching batch.' })
+      try {
+        let pool = await readContentPool(env, input)
+        const findAvailable = (items: typeof pool) => {
+          const selected: typeof pool = []
+          for (const item of items) {
+            if (input.recentItems.some(recent => isNearDuplicateGeneratedText(recent, item.text))) continue
+            if (selected.some(previous => isNearDuplicateGeneratedText(previous.text, item.text))) continue
+            selected.push(item)
+          }
+          return selected
+        }
+        let available = findAvailable(pool)
+        if (available.length < input.count) {
+          contentLock = await acquireContentGenerationLock(env, input)
+          if (!contentLock) {
+            report({ stage: 'vault-waiting', detail: 'Another request is filling this content pool; waiting for its result.' })
+            for (let attempt = 0; attempt < 6 && available.length < input.count; attempt += 1) {
+              await new Promise(resolve => setTimeout(resolve, 250))
+              pool = await readContentPool(env, input)
+              available = findAvailable(pool)
+            }
+            if (available.length < input.count) {
+              report({ stage: 'vault-busy', detail: 'The shared content pool is still being generated elsewhere.' })
+              return safeJson(503, { error: { code: 'GENERATION_IN_PROGRESS', message: 'This content pool is already being generated. Retry shortly.', retryable: true } }, origin)
+            }
+          }
+        }
+        if (available.length >= input.count) {
+          report({ stage: 'vault-hit', detail: 'A matching approved content batch was found. No provider request was needed.' })
+          return safeJson(200, { requestId: input.requestId, provider: 'content-vault', items: available.slice(0, input.count), cacheHit: true }, origin)
+        }
+        report({ stage: 'vault-miss', detail: 'No complete matching batch was available; proceeding to the selected provider.' })
+        if (pool.length) generationInput = { ...input, recentItems: [...new Set([...input.recentItems, ...pool.map(item => item.text)])].slice(-30) }
+      } catch {
+        report({ stage: 'vault-unavailable', detail: 'The content vault could not be checked; continuing to the provider.' })
+        // Redis is an optimization; live generation and offline play remain available.
+      }
+    } else if (!liveProviderTest) {
+      report({ stage: 'vault-skipped', detail: 'No shared content vault is configured; continuing to the provider.' })
+    }
+
+    if (env.AI_ENABLED !== 'true') throw new SafeProviderError('BUDGET_EXHAUSTED', 'AI generation is disabled by the operator.', false, 503)
+    if (provider === 'cloudflare-workers-ai' && sessionKey) throw new SafeProviderError('INVALID_REQUEST', 'Cloudflare credentials are operator-managed and cannot be supplied by clients.', false, 400)
+    if (provider !== 'cloudflare-workers-ai' && (!sessionKey || sessionKey.length < 20 || sessionKey.length > 256 || hasControlCharacters(sessionKey))) {
+      throw new SafeProviderError('PROVIDER_NOT_CONFIGURED', 'A valid session provider key is required.', false, 400)
+    }
+    slot = await acquireGenerationSlotForAddress(env, getClientAddress(request), provider)
+    if (!slot.ok) {
+      const message = slot.reason === 'rate'
+        ? 'Too many generation requests. Try again shortly.'
+        : slot.reason === 'daily'
+          ? 'The gateway daily generation budget has been reached.'
+          : slot.reason === 'provider-daily'
+            ? 'This provider has reached its daily generation budget.'
+            : slot.reason === 'configuration'
+              ? 'Production generation is disabled until a shared rate-limit and budget store is configured.'
+              : slot.reason === 'storage'
+                ? 'The shared abuse-control service is temporarily unavailable.'
+                : 'The generation service is busy. Try again shortly.'
+      const code = slot.reason === 'rate' ? 'RATE_LIMITED' : slot.reason === 'storage' ? 'PROVIDER_UNAVAILABLE' : 'BUDGET_EXHAUSTED'
+      const status = slot.reason === 'rate' ? 429 : 503
+      throw new SafeProviderError(code, message, slot.reason === 'rate' || slot.reason === 'storage', status)
+    }
+
+    providerGenerationStarted = true
+    report({ stage: 'provider-starting', provider, detail: `Generating with ${providerLabel(provider)}.` })
+    const items = await generateWithProvider(provider, generationInput, env, sessionKey, signal)
+    report({ stage: 'provider-generated', provider, detail: 'Provider output passed server validation.' })
+    if (!liveProviderTest && isContentVaultConfigured(env)) {
+      report({ stage: 'vault-saving', detail: 'Saving the validated batch to the configured shared content vault.' })
+      try {
+        await writeContentPool(env, input, items)
+        report({ stage: 'vault-saved', detail: 'The validated batch was saved to the shared content vault.' })
+      } catch {
+        // A cache write failure must not discard valid generated content for this session.
+        report({ stage: 'vault-save-failed', detail: 'The content vault could not save this batch. The validated content will still be used for this session.' })
+      }
+    }
+    report({ stage: 'content-ready', provider, detail: 'Validated content is ready for the game.' })
+    return safeJson(200, { requestId: input.requestId, provider, items, cacheHit: false }, origin)
+  } catch (error) {
+    if (providerGenerationStarted && activeProvider) {
+      const detail = error instanceof SafeProviderError ? error.message : 'The provider request failed.'
+      report({ stage: 'provider-failed', provider: activeProvider, detail })
+    }
+    return errorResponse(error, origin)
+  } finally {
+    if (contentLock) await releaseContentGenerationLock(env, contentLockInput!, contentLock).catch(() => undefined)
+    if (slot?.ok) await slot.release()
+  }
+}
+
+function contentGenerationProgressResponse(request: Request): Response {
+  const origin = request.headers.get('origin') ?? undefined
+  const abortController = new AbortController()
+  const encoder = new TextEncoder()
+  const headers = new Headers(securityHeaders(origin))
+  headers.set('content-type', 'application/x-ndjson; charset=utf-8')
+  headers.set('cache-control', 'no-store, private, no-transform')
+  headers.set('x-accel-buffering', 'no')
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let cancelled = false
+      const send = (frame: GenerationStreamFrame) => {
+        if (cancelled) return
+        try { controller.enqueue(encoder.encode(`${JSON.stringify(frame)}\n`)) }
+        catch { cancelled = true }
+      }
+      const report: GenerationProgressReporter = event => send({ type: 'progress', ...event })
+      const abortFromRequest = () => abortController.abort(request.signal.reason)
+      if (request.signal.aborted) abortController.abort(request.signal.reason)
+      else request.signal.addEventListener('abort', abortFromRequest, { once: true })
+
+      void handleContentGenerateRequest(request, report, abortController.signal)
+        .then(async response => {
+          let body: unknown
+          try { body = await response.json() }
+          catch { body = { error: { code: 'INVALID_RESPONSE', message: 'The gateway returned an unreadable response.', retryable: true } } }
+          send({ type: 'result', status: response.status, body })
+        })
+        .catch(() => send({ type: 'result', status: 500, body: { error: { code: 'INTERNAL_ERROR', message: 'Generation could not be completed.', retryable: true } } }))
+        .finally(() => {
+          request.signal.removeEventListener('abort', abortFromRequest)
+          if (!cancelled) { try { controller.close() } catch { /* Already closed. */ } }
+        })
+    },
+    cancel(reason) {
+      abortController.abort(reason)
+    },
+  })
+  return new Response(stream, { status: 200, headers })
+}
+
+export const app = new Elysia({ name: 'king-fun-api' })
   .onRequest(({ request, set }) => {
     const origin = request.headers.get('origin')
     if (rejectOrigin(origin)) {
@@ -167,99 +358,9 @@ const app = new Elysia({ name: 'king-fun-api' })
     } catch { return safeJson(400, { error: { code: 'INVALID_REQUEST', message: 'Invalid moderation request.', retryable: false } }, origin) }
   })
   .post('/v1/content/generate', async ({ request }) => {
-    const origin = request.headers.get('origin') ?? undefined
-    let slot: Awaited<ReturnType<typeof acquireGenerationSlotForAddress>> | undefined
-    let contentLock: string | null = null
-    let contentLockInput: ReturnType<typeof validateGenerateInput> | undefined
-    try {
-      if (env.NODE_ENV === 'production') {
-        const protocol = new URL(request.url).protocol
-        const forwardedProtocol = request.headers.get('x-forwarded-proto')
-        if (protocol !== 'https:' && forwardedProtocol !== 'https') throw new SafeProviderError('INVALID_REQUEST', 'HTTPS is required for production generation.', false, 400)
-        if (!origin || !allowedOrigins.has(origin)) throw new SafeProviderError('ORIGIN_NOT_ALLOWED', 'This origin is not allowed.', false, 403)
-      }
-      if (rejectOrigin(origin ?? null)) throw new SafeProviderError('ORIGIN_NOT_ALLOWED', 'This origin is not allowed.', false, 403)
-      if ((request.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase() !== 'application/json') {
-        throw new SafeProviderError('INVALID_REQUEST', 'Content-Type must be application/json.', false, 415)
-      }
-      const providerHeader = request.headers.get('x-provider-id')
-      if (!providerHeader || !allowedProviders.has(providerHeader as ProviderId)) throw new SafeProviderError('INVALID_REQUEST', 'Unsupported provider.', false, 400)
-      const provider = providerHeader as ProviderId
-      const liveProviderTest = request.headers.get('x-provider-test') === 'true'
-      const sessionKey = request.headers.get('x-provider-key')?.trim() || undefined
-      const rawBody = await readBoundedText(request, maxBodyBytes)
-      let parsedBody: unknown
-      try { parsedBody = JSON.parse(rawBody) }
-      catch { throw new SafeProviderError('INVALID_REQUEST', 'Request body must be valid JSON.', false, 400) }
-      const input = validateGenerateInput(parsedBody)
-      if (input.suitability === 'adult' && input.adultMode !== true) throw new SafeProviderError('INVALID_REQUEST', 'Adult content requests require explicit 18+ mode.', false, 400)
-      contentLockInput = input
-      let generationInput = input
-      // Cache-first: a full, already validated content pool avoids provider calls and quota consumption.
-      if (!liveProviderTest && isContentVaultConfigured(env)) {
-        try {
-          let pool = await readContentPool(env, input)
-          const findAvailable = (items: typeof pool) => {
-            const selected: typeof pool = []
-            for (const item of items) {
-              if (input.recentItems.some(recent => isNearDuplicateGeneratedText(recent, item.text))) continue
-              if (selected.some(previous => isNearDuplicateGeneratedText(previous.text, item.text))) continue
-              selected.push(item)
-            }
-            return selected
-          }
-          let available = findAvailable(pool)
-          if (available.length < input.count) {
-            contentLock = await acquireContentGenerationLock(env, input)
-            if (!contentLock) {
-              // Another instance owns the generation lease. Give it a short window
-              // to publish its result rather than launching a second provider call.
-              for (let attempt = 0; attempt < 6 && available.length < input.count; attempt += 1) {
-                await new Promise(resolve => setTimeout(resolve, 250))
-                pool = await readContentPool(env, input)
-                available = findAvailable(pool)
-              }
-              if (available.length < input.count) return safeJson(503, { error: { code: 'GENERATION_IN_PROGRESS', message: 'This content pool is already being generated. Retry shortly.', retryable: true } }, origin)
-            }
-          }
-          if (available.length >= input.count) return safeJson(200, { requestId: input.requestId, provider: 'content-vault', items: available.slice(0, input.count), cacheHit: true }, origin)
-          if (pool.length) generationInput = { ...input, recentItems: [...new Set([...input.recentItems, ...pool.map(item => item.text)])].slice(-30) }
-        } catch { /* Redis is an optimization; live generation and offline play remain available. */ }
-      }
-      if (env.AI_ENABLED !== 'true') throw new SafeProviderError('BUDGET_EXHAUSTED', 'AI generation is disabled by the operator.', false, 503)
-      if (provider === 'cloudflare-workers-ai' && sessionKey) throw new SafeProviderError('INVALID_REQUEST', 'Cloudflare credentials are operator-managed and cannot be supplied by clients.', false, 400)
-      if (provider !== 'cloudflare-workers-ai' && (!sessionKey || sessionKey.length < 20 || sessionKey.length > 256 || hasControlCharacters(sessionKey))) {
-        throw new SafeProviderError('PROVIDER_NOT_CONFIGURED', 'A valid session provider key is required.', false, 400)
-      }
-      slot = await acquireGenerationSlotForAddress(env, getClientAddress(request), provider)
-      if (!slot.ok) {
-        const message = slot.reason === 'rate'
-          ? 'Too many generation requests. Try again shortly.'
-          : slot.reason === 'daily'
-            ? 'The gateway daily generation budget has been reached.'
-            : slot.reason === 'provider-daily'
-              ? 'This provider has reached its daily generation budget.'
-              : slot.reason === 'configuration'
-                ? 'Production generation is disabled until a shared rate-limit and budget store is configured.'
-                : slot.reason === 'storage'
-                  ? 'The shared abuse-control service is temporarily unavailable.'
-                  : 'The generation service is busy. Try again shortly.'
-        const code = slot.reason === 'rate' ? 'RATE_LIMITED' : slot.reason === 'storage' ? 'PROVIDER_UNAVAILABLE' : 'BUDGET_EXHAUSTED'
-        const status = slot.reason === 'rate' ? 429 : 503
-        throw new SafeProviderError(code, message, slot.reason === 'rate' || slot.reason === 'storage', status)
-      }
-      const items = await generateWithProvider(provider, generationInput, env, sessionKey, request.signal)
-      try { await writeContentPool(env, input, items) } catch { /* A cache write failure must not discard valid generated content. */ }
-      return safeJson(200, { requestId: input.requestId, provider, items, cacheHit: false }, origin)
-    } catch (error) {
-      return errorResponse(error, origin)
-    } finally {
-      if (contentLock) await releaseContentGenerationLock(env, contentLockInput!, contentLock).catch(() => undefined)
-      if (slot?.ok) await slot.release()
-    }
+    if (request.headers.get('accept')?.includes('application/x-ndjson')) return contentGenerationProgressResponse(request)
+    return handleContentGenerateRequest(request)
   })
-
-export default app
 
 /** Vercel's root-level catch-all receives /api/...; strip only this fixed prefix. */
 export const handle = (request: Request): Promise<Response> => {

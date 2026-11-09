@@ -46,7 +46,8 @@ const SettingsScreen = lazy(() => import('./screens/SettingsScreen.tsx').then(mo
 const CommandPalette = lazy(() => import('./components/ui/CommandPalette.tsx').then(module => ({ default: module.CommandPalette })))
 const ConfirmDialog = lazy(() => import('./components/ui/ConfirmDialog.tsx').then(module => ({ default: module.ConfirmDialog })))
 import type { AiGame, AiGeneratedItem, AiItemKind } from './services/ai-providers.ts'
-import { generateAiContent } from './services/ai-providers.ts'
+import { generateAiContent, type AiGenerationProgressEvent, type AiProvider } from './services/ai-providers.ts'
+import { GameLoadingOverlay, type GameLoadingEntry } from './components/gameplay/GameLoadingOverlay.tsx'
 import { GAMES, INITIAL_SAVE, normalizePromptReports, normalizeSave, resolveGameRoster, type Game, type GameSetup, type GuessUpPreferences, type MotionPreference, type Save, type SetupPackDraft, normalizeImportedSave } from './types.ts'
 import { wheelAngleForPlayer, wheelAngleForSegment } from './domain/games/roulette.ts'
 import { TRUTH_DARE_WHEEL_OPTIONS, truthDareKindForIndex } from './domain/games/truth-or-dare-wheel.ts'
@@ -61,6 +62,7 @@ type SeedContentModule = typeof import('./content/seed.ts')
 type LoadedSeedContent = { readonly content: SeedContentModule['SEEDED_CONTENT']; readonly packs: SeedContentModule['SEEDED_PACKS'] }
 type Screen = 'home' | 'setup' | 'play' | 'history' | 'settings'
 type Confirmation = { title: string; description: string; confirmLabel: string; destructive?: boolean; onConfirm: () => void }
+type GameLoadingState = { game: Game; gameName: string; currentTitle: string; currentDetail: string; entries: GameLoadingEntry[] }
 
 function patchActiveSave(current: Save, phase: string, data: Record<string, any>): Save {
   if (!current.active) return current
@@ -117,6 +119,8 @@ export default function AppShell({ initialState, initialRevision, initialPersist
   const revisionRef = useRef(initialRevision)
   const writeQueueRef = useRef<Promise<void>>(Promise.resolve())
   const startPendingRef = useRef(false)
+  const startFailedRef = useRef(false)
+  const [gameLoading, setGameLoading] = useState<GameLoadingState | null>(null)
   const storageStatus = usePortalStorageStatus()
   const [screen, setScreen] = useState<Screen>('home')
   const [ambientMotionEnabled, setAmbientMotionEnabled] = useState(true)
@@ -138,6 +142,90 @@ export default function AppShell({ initialState, initialRevision, initialPersist
   const [launch, setLaunch] = useState<{ game: Game; x: number; y: number } | null>(null)
   const lastSetupRef = useRef<GameSetup | null>(null)
   const mainContentRef = useRef<HTMLElement>(null)
+
+  const setGameLoadingEntry = useCallback((id: string, title: string, detail: string, state: GameLoadingEntry['state'] = 'active') => {
+    setGameLoading(current => {
+      if (!current) return current
+      const entries = current.entries.map(entry => entry.state === 'active' && entry.id !== id
+        ? { ...entry, state: 'complete' as const }
+        : entry)
+      const nextEntry: GameLoadingEntry = { id, title, detail, state }
+      const existingIndex = entries.findIndex(entry => entry.id === id)
+      if (existingIndex >= 0) entries[existingIndex] = nextEntry
+      else entries.push(nextEntry)
+      return { ...current, currentTitle: title, currentDetail: detail, entries: entries.slice(-12) }
+    })
+  }, [])
+
+  const reportAiGenerationProgress = useCallback((event: AiGenerationProgressEvent) => {
+    const providerName = (provider: AiProvider) => provider === 'cloudflare-workers-ai'
+      ? 'Cloudflare Workers AI'
+      : provider === 'gemini' ? 'Gemini' : 'Groq'
+    switch (event.stage) {
+      case 'gateway-connecting':
+        setGameLoadingEntry('gateway', 'Connecting to the KING-FUN backend', 'Opening the content-generation gateway.', 'active')
+        break
+      case 'gateway-accepted':
+        setGameLoadingEntry('gateway', 'Backend accepted the request', 'The content-generation gateway is processing this request.', 'complete')
+        break
+      case 'vault-checking':
+        setGameLoadingEntry('content-vault', 'Checking the content vault', event.detail ?? 'Searching for an approved batch for this game and category.', 'active')
+        break
+      case 'vault-hit':
+        setGameLoadingEntry('content-vault', 'Content vault hit', event.detail ?? 'An approved cached batch was found; no model call was needed.', 'complete')
+        break
+      case 'vault-miss':
+        setGameLoadingEntry('content-vault', 'No matching content in the vault', event.detail ?? 'Continuing to the configured generation provider.', 'complete')
+        break
+      case 'vault-waiting':
+        setGameLoadingEntry('content-vault', 'Waiting for the content vault', event.detail ?? 'Another request is filling this category.', 'active')
+        break
+      case 'vault-busy':
+        setGameLoadingEntry('content-vault', 'Content vault is busy', event.detail ?? 'The shared content pool is still being generated.', 'warning')
+        break
+      case 'vault-unavailable':
+        setGameLoadingEntry('content-vault', 'Content vault unavailable', event.detail ?? 'Continuing without the shared cache.', 'warning')
+        break
+      case 'vault-skipped':
+        setGameLoadingEntry('content-vault', 'Content vault not configured', event.detail ?? 'The gateway will continue to the selected provider.', 'complete')
+        break
+      case 'vault-saving':
+        setGameLoadingEntry('content-vault-save', 'Saving validated content', event.detail ?? 'Writing the generated batch to the configured shared content vault.', 'active')
+        break
+      case 'vault-saved':
+        setGameLoadingEntry('content-vault-save', 'Validated content saved to vault', event.detail ?? 'The shared content vault confirmed the batch write.', 'complete')
+        break
+      case 'vault-save-failed':
+        setGameLoadingEntry('content-vault-save', 'Content vault save unavailable', event.detail ?? 'The validated content will still be used for this session.', 'warning')
+        break
+      case 'provider-starting':
+        setGameLoadingEntry(`provider-${event.provider}`, `Generating with ${providerName(event.provider)}`, event.detail ?? 'The backend has started this provider request.', 'active')
+        break
+      case 'provider-succeeded':
+        setGameLoadingEntry(`provider-${event.provider}`, `${providerName(event.provider)} generated content`, event.detail ?? 'The provider response passed server-side validation.', 'complete')
+        break
+      case 'provider-failed':
+        setGameLoadingEntry(`provider-${event.provider}`, `${providerName(event.provider)} failed`, event.message, 'warning')
+        break
+      case 'provider-skipped':
+        setGameLoadingEntry(`provider-skip-${event.provider}`, `${providerName(event.provider)} skipped`, event.message, 'warning')
+        break
+      case 'provider-fallback':
+        setGameLoadingEntry('provider-fallback', `Falling back to ${providerName(event.to)}`, `${providerName(event.from)} did not complete the request. Trying the next provider in your configured order.`, 'warning')
+        break
+      case 'local-fallback':
+        setGameLoadingEntry('local-fallback', 'Using local content fallback', event.message, 'warning')
+        break
+      case 'content-ready':
+        setGameLoadingEntry('generated-content', event.provider === 'content-vault'
+          ? 'Content ready from the vault'
+          : event.provider === 'local-curated'
+            ? 'Local fallback content ready'
+            : `Content ready from ${providerName(event.provider)}`,
+        event.detail ?? 'Validated content is ready for the game.', 'complete')
+        break
+    }
+  }, [setGameLoadingEntry])
 
   const ensureSeedContent = async (): Promise<LoadedSeedContent> => {
     if (seedContent) return seedContent
@@ -371,7 +459,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
         ...seenIds.map(id => contentItems.find(item => item.id === id)?.text ?? aiGeneratedTextRef.current.get(id)),
       ].filter((v): v is string => Boolean(v)))].slice(-30)
       try {
-        const result = await generateAiContent({ game: game as AiGame, itemKind: itemKind as AiItemKind, categoryId, ...(sourcePack ? { categoryName: sourcePack.name, categoryDescription: sourcePack.description } : {}), count: 1, suitability, adultMode: save.adultMode, playerCount: save.players.length, playerNames: save.players.map(player => player.name), ...(currentTurnPlayerNames ? { currentTurnPlayerNames } : {}), recentItems: recentTexts })
+        const result = await generateAiContent({ game: game as AiGame, itemKind: itemKind as AiItemKind, categoryId, ...(sourcePack ? { categoryName: sourcePack.name, categoryDescription: sourcePack.description } : {}), count: 1, suitability, adultMode: save.adultMode, playerCount: save.players.length, playerNames: save.players.map(player => player.name), ...(currentTurnPlayerNames ? { currentTurnPlayerNames } : {}), recentItems: recentTexts }, undefined, reportAiGenerationProgress)
         const first = result.items[0]
         setToast(result.provider === 'content-vault'
           ? 'Loaded fresh content from the content vault.'
@@ -406,7 +494,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
     const local = selectContent(game, kind, packIds, seenIds, true, playerName)
     if (!local && !online) setToast('Offline content is unavailable for this selection. Reconnect to generate fresh content from the API.')
     return local
-  }, [contentItems, contentPacks, save.adultMode, save.players, save.recent, selectContent])
+  }, [contentItems, contentPacks, save.adultMode, save.players, save.recent, selectContent, reportAiGenerationProgress])
 
   const drawGuessUpDeck = (packIds: readonly string[], excludeIds: ReadonlySet<string> = new Set()): ContentItem[] => {
     const pool = uniqueContentItems(contentItems.filter(item => contentAllowedForMode(item, save.adultMode) && !blockedContentIdsRef.current.has(item.id) && !excludeIds.has(item.id) && item.gameId === 'guessup' && packIds.includes(item.packId) && (item.kind === 'phrase' || item.kind === 'word')))
@@ -507,15 +595,42 @@ export default function AppShell({ initialState, initialRevision, initialPersist
   const startGame = async (setup?: GameSetup) => {
     if (startPendingRef.current) return
     startPendingRef.current = true
+    startFailedRef.current = false
+    const startedAt = Date.now()
+    const game = selected
+    const gameName = GAMES.find(item => item.id === game)?.name ?? 'game'
+    setGameLoading({
+      game,
+      gameName,
+      currentTitle: 'Loading local game data',
+      currentDetail: 'Preparing this game on your device. No provider has been contacted yet.',
+      entries: [{ id: 'local-catalogue', title: 'Loading local game data', detail: 'Opening the local game catalogue and saved packs.', state: 'active' }],
+    })
+    const failStart = (message: string) => {
+      startFailedRef.current = true
+      setToast(message)
+      setGameLoadingEntry('startup-error', 'Could not start the game', message, 'error')
+    }
     try {
       const loadedSeed = await ensureSeedContent()
-      const latestBlockedIds = await loadBlockedContentIds([...loadedSeed.content, ...customItems].map(item => item.id))
+      setGameLoadingEntry('local-catalogue', 'Local game data loaded', `${loadedSeed.packs.length} packs and ${loadedSeed.content.length} local content items are available.`, 'complete')
+      setGameLoadingEntry('content-check', 'Applying local content rules', 'Evaluating the selected catalogue against local age-suitability rules.', 'active')
+      const contentIds = [...loadedSeed.content, ...customItems].map(item => item.id)
+      const latestBlockedIds = await loadBlockedContentIds(contentIds, event => {
+        if (event.stage === 'checking') {
+          setGameLoadingEntry('backend-content-status', 'Fetching moderation status from the backend', `Checking batch ${event.batch} of ${event.totalBatches} (${event.totalItems} content IDs).`, 'active')
+        } else if (event.stage === 'received') {
+          setGameLoadingEntry('backend-content-status', 'Backend content status received', event.detail ?? 'The backend returned moderation status for local content.', 'complete')
+        } else {
+          setGameLoadingEntry('backend-content-status', 'Backend content status unavailable', event.detail ?? 'Continuing with local eligibility rules.', 'warning')
+        }
+      })
+      setGameLoadingEntry('content-check', 'Content availability checked', 'Local age-suitability rules and any returned moderation blocks have been applied.', 'complete')
       const mergedBlockedIds = new Set([...blockedContentIdsRef.current, ...latestBlockedIds])
       blockedContentIdsRef.current = mergedBlockedIds
       setBlockedContentIds(mergedBlockedIds)
       const gameContentItems = [...loadedSeed.content, ...customItems].filter(item => contentAllowedForMode(item, save.adultMode) && !mergedBlockedIds.has(item.id))
       const gameContentPacks = [...loadedSeed.packs, ...customPacks]
-      const game = selected
       const requestedConfig = setup ?? lastSetupRef.current ?? makeDefaultSetup(game, save.players, gameContentPacks, save.guessUpPreferences ?? INITIAL_SAVE.guessUpPreferences!, save.imposterPreferences ?? INITIAL_SAVE.imposterPreferences!)
       // Normalize legacy or partial Imposter setup snapshots before they enter a round.
       const config: GameSetup = game === 'imposter'
@@ -534,11 +649,12 @@ export default function AppShell({ initialState, initialRevision, initialPersist
       const maximumPlayers = game === 'imposter' || game === 'werewolf' || game === 'mafia' || game === 'who-am-i' ? 20
         : game === 'hot-bomb-duel' || game === 'qupid' || game === 'questions-for-love' || game === 'a-or-b' ? 2 : 32
       const ruleOnlyGame = ['timer-impostor', 'werewolf', 'mafia', 'murder'].includes(game)
-      if (save.players.length < minimumPlayers) { setToast(`Add at least ${minimumPlayers} players for ${GAMES.find(item => item.id === game)?.name ?? 'this game'}.`); return }
-      if (save.players.length > maximumPlayers) { setToast(`${GAMES.find(item => item.id === game)?.name ?? 'This game'} supports at most ${maximumPlayers} players.`); return }
-      if (config.packIds.length === 0 && !ruleOnlyGame) { setToast('Select at least one content pack.'); return }
-      if (!save.adultMode && gameContentPacks.some(pack => config.packIds.includes(pack.id) && pack.suitability !== 'general')) { setToast('Only all-ages packs can be played while 18+ mode is off.'); return }
+      if (save.players.length < minimumPlayers) { failStart(`Add at least ${minimumPlayers} players for ${GAMES.find(item => item.id === game)?.name ?? 'this game'}.`); return }
+      if (save.players.length > maximumPlayers) { failStart(`${GAMES.find(item => item.id === game)?.name ?? 'This game'} supports at most ${maximumPlayers} players.`); return }
+      if (config.packIds.length === 0 && !ruleOnlyGame) { failStart('Select at least one content pack.'); return }
+      if (!save.adultMode && gameContentPacks.some(pack => config.packIds.includes(pack.id) && pack.suitability !== 'general')) { failStart('Only all-ages packs can be played while 18+ mode is off.'); return }
 
+      setGameLoadingEntry('game-rules', 'Preparing game rules', `${gameName} is preparing its round and player state on this device.`, 'active')
       let data: Record<string, any> = {}
       let phase = 'playing'
       const recent = { ...save.recent }
@@ -549,7 +665,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
           .map(pack => [String(pack.id), pack] as const)).values()]
         const selectedCategoryIds = categoryPacks.map(pack => String(pack.id))
         if (!selectedCategoryIds.length) {
-          setToast('Select at least one Imposter category.')
+          failStart('Select at least one Imposter category.')
           return
         }
 
@@ -559,12 +675,12 @@ export default function AppShell({ initialState, initialRevision, initialPersist
         const categoryWindow = categoryRepeatWindow(selectedCategoryIds.length)
         const selectedCategoryId = selectImposterCategory(selectedCategoryIds, recentCategoryIds, categoryWindow, secureRandomInteger)
         if (!selectedCategoryId) {
-          setToast('No eligible Imposter category is available. Reopen setup and try again.')
+          failStart('No eligible Imposter category is available. Reopen setup and try again.')
           return
         }
         const sourcePack = categoryPacks.find(pack => String(pack.id) === selectedCategoryId)
         if (!sourcePack) {
-          setToast('A selected Imposter category is unavailable. Reopen setup and try again.')
+          failStart('A selected Imposter category is unavailable. Reopen setup and try again.')
           return
         }
 
@@ -596,7 +712,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
               suitability: sourcePack.suitability,
               adultMode: sourcePack.suitability === 'adult',
               recentItems: usedWordTexts,
-            })
+            }, undefined, reportAiGenerationProgress)
             const generatedWordPool = generated.items.map(item => ({
               id: asContentId(`ai:${item.id}`),
               gameId: 'imposter' as const,
@@ -648,7 +764,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
             randomInteger: secureRandomInteger,
           })
         } catch (error) {
-          setToast(error instanceof Error ? error.message : 'The Mystery Who round configuration is invalid.')
+          failStart(error instanceof Error ? error.message : 'The Mystery Who round configuration is invalid.')
           return
         }
         data = { ...round, wordId: word.id, packIds: config.packIds, setupSnapshot: config, playerRoster: save.players }
@@ -675,7 +791,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
                 categoryName: sourcePack.name, categoryDescription: sourcePack.description, count: 12,
                 suitability: save.adultMode ? 'adult' : 'general', adultMode: save.adultMode,
                 playerCount: save.players.length, playerNames: save.players.map(player => player.name), recentItems: [],
-              })
+              }, undefined, reportAiGenerationProgress)
               setToast(`Generated a fresh GuessUp deck with ${generated.provider === 'cloudflare-workers-ai' ? 'Cloudflare Workers AI' : generated.provider}.`)
               selectedDeck = generated.items.map(item => ({
                 id: asContentId(`ai:${item.id}`), gameId: 'guessup' as const, kind: 'phrase' as const, text: item.text,
@@ -684,6 +800,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
                 provenance: { source: 'ai-assisted:gateway' as const, license: 'UserCreated' as const, creator: 'ai' as const, createdAt: Date.now(), reviewedAt: null },
               }))
             } catch (error) {
+              setGameLoadingEntry('guessup-generation-error', 'GuessUp generation failed', error instanceof Error ? error.message : 'Try again shortly.', 'error')
               setToast(`GuessUp generation failed: ${error instanceof Error ? error.message : 'Try again shortly.'}`)
             }
           }
@@ -699,7 +816,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
                   categoryName: sourcePack.name, categoryDescription: sourcePack.description, count: 12,
                   suitability: save.adultMode ? 'adult' : 'general', adultMode: save.adultMode,
                   playerCount: save.players.length, playerNames: save.players.map(player => player.name), recentItems: selectedDeck.map(item => item.text),
-                })
+                }, undefined, reportAiGenerationProgress)
                 selectedDeckB = generated.items.map(item => ({
                   id: asContentId(`ai:${item.id}`), gameId: 'guessup' as const, kind: 'phrase' as const, text: item.text,
                   locale: 'en' as const, packId: sourcePack.id, categoryId: String(sourcePack.id),
@@ -707,13 +824,14 @@ export default function AppShell({ initialState, initialRevision, initialPersist
                   provenance: { source: 'ai-assisted:gateway' as const, license: 'UserCreated' as const, creator: 'ai' as const, createdAt: Date.now(), reviewedAt: null },
                 }))
               } catch (error) {
+                setGameLoadingEntry('guessup-team-b-error', 'Team B deck generation failed', error instanceof Error ? error.message : 'Try again shortly.', 'error')
                 setToast(`GuessUp Team B generation failed: ${error instanceof Error ? error.message : 'Try again shortly.'}`)
               }
             }
           }
           if (selectedDeckB.length === 0) selectedDeckB = secureShuffle(selectedDeck)
         }
-        if (selectedDeck.length === 0 || selectedDeckB.length === 0) { setToast('Every selected GuessUp deck is exhausted under its recent-content window. Select another deck or reset recent history.'); return }
+        if (selectedDeck.length === 0 || selectedDeckB.length === 0) { failStart('Every selected GuessUp deck is exhausted under its recent-content window. Select another deck or reset recent history.'); return }
         const teamAPlayerIds = save.players.filter(player => config.teamAssignments[player.id] === 'A').map(player => player.id)
         const teamBPlayerIds = save.players.filter(player => config.teamAssignments[player.id] === 'B').map(player => player.id)
         try {
@@ -750,7 +868,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
               recent[key] = appendRecentContent(recent[key] ?? [], item.id, 20)
             }
           }
-        } catch (error) { setToast(error instanceof Error ? error.message : 'GuessUp could not be started.'); return }
+        } catch (error) { failStart(error instanceof Error ? error.message : 'GuessUp could not be started.'); return }
         phase = 'ready'
       } else if (game === 'truth-or-dare') {
         const selectedNames = gameContentPacks.filter(pack => config.packIds.includes(pack.id)).map(pack => pack.name)
@@ -804,16 +922,20 @@ export default function AppShell({ initialState, initialRevision, initialPersist
         if (config.mode === 'spin-wheel') {
           phase = 'spin'
         } else {
-          data = { ...data, prompt: null, promptId: null, seenContentIds: [] }
-          phase = 'prompt'
-          queueMicrotask(() => {
-            void draw('never-have-i-ever', 'never-have-i-ever', config.packIds, [], typeof firstPlayer?.name === 'string' ? firstPlayer.name : undefined).then(item => {
-              if (!item) return
-              setSave(current => current.active?.game === 'never-have-i-ever' && current.active.phase === 'prompt' && !current.active.data.prompt
-                ? patchActiveSave(current, 'prompt', { ...current.active.data, prompt: item.text, promptId: item.id, seenContentIds: [item.id] })
-                : current)
-            })
-          })
+          setGameLoadingEntry('opening-prompt', 'Preparing the opening statement', 'Selecting the first statement for this session.', 'active')
+          const initialPrompt = await draw('never-have-i-ever', 'never-have-i-ever', config.packIds, [], typeof firstPlayer?.name === 'string' ? firstPlayer.name : undefined)
+          data = {
+            ...data,
+            prompt: initialPrompt?.text ?? null,
+            promptId: initialPrompt?.id ?? null,
+            seenContentIds: initialPrompt ? [initialPrompt.id] : [],
+          }
+          phase = initialPrompt ? 'prompt' : 'exhausted'
+          if (initialPrompt) {
+            const key = contentQueueKey(initialPrompt)
+            recent[key] = appendRecentContent(recent[key] ?? [], initialPrompt.id, 20)
+          }
+          setGameLoadingEntry('opening-prompt', initialPrompt ? 'Opening statement ready' : 'No opening statement available', initialPrompt ? 'The first statement is ready for the selected player.' : 'The selected packs have no eligible statement right now.', initialPrompt ? 'complete' : 'warning')
         }
       } else {
         const { createPartyArcadeSession } = await import('./domain/games/party-arcade.ts')
@@ -835,7 +957,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
                 suitability: save.adultMode ? 'adult' : 'general', adultMode: save.adultMode,
                 playerCount: save.players.length, playerNames: save.players.map(player => player.name),
                 recentItems: recentIds.map(id => contentItems.find(item => item.id === id)?.text ?? aiGeneratedTextRef.current.get(id)).filter((text): text is string => Boolean(text)).slice(-30),
-              })
+              }, undefined, reportAiGenerationProgress)
               setToast(generated.provider === 'content-vault'
                 ? 'Loaded fresh content from the content vault.'
                 : generated.provider === 'local-curated'
@@ -847,13 +969,13 @@ export default function AppShell({ initialState, initialRevision, initialPersist
                 return mapped
               })
             } catch (error) {
-              setToast(`Content generation failed: ${error instanceof Error ? error.message : 'Try again shortly.'}`)
+              failStart(`Content generation failed: ${error instanceof Error ? error.message : 'Try again shortly.'}`)
               return
             }
           }
         }
         if (playableItems.length === 0 && !ruleOnlyGame) {
-          setToast('Content generation is unavailable. Reconnect and retry to load prompts for this game.')
+          failStart('Content generation is unavailable. Reconnect and retry to load prompts for this game.')
           return
         }
         try {
@@ -870,7 +992,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
             recent[key] = appendRecentContent(recent[key] ?? [], item.id, 20)
           }
         } catch (error) {
-          setToast(error instanceof Error ? error.message : 'This party game could not be started.')
+          failStart(error instanceof Error ? error.message : 'This party game could not be started.')
           return
         }
       }
@@ -882,6 +1004,7 @@ export default function AppShell({ initialState, initialRevision, initialPersist
         ...(game === 'imposter' && config.imposter ? { imposterPreferences: config.imposter } : {}),
         active: { game, phase, data },
       }
+      setGameLoadingEntry('save-session', 'Saving this game locally', 'Committing the session snapshot before gameplay is revealed.', 'active')
       if (persistenceAvailable) {
         try {
           // Commit the role assignment, selected word, roster, and recent queues
@@ -891,23 +1014,35 @@ export default function AppShell({ initialState, initialRevision, initialPersist
           revisionRef.current = revision
           announceRevision(revision)
           publishStorageStatus({ kind: 'ready', message: 'New game snapshot saved before gameplay began.' })
+          setGameLoadingEntry('save-session', 'Game session saved', 'The new session is safely committed on this device.', 'complete')
         } catch (error) {
           if (error instanceof StorageConflictError) {
             publishStorageStatus({ kind: 'conflict', message: 'Another tab has saved a newer version. Reload the latest save before starting a new game.', remoteRevision: error.remoteRevision })
-            setToast('A newer save exists in another tab. Reload before starting so a role or outcome is not lost.')
+            failStart('A newer save exists in another tab. Reload before starting so a role or outcome is not lost.')
           } else {
             publishStorageStatus({ kind: 'warning', message: `New game could not be committed: ${error instanceof Error ? error.message : 'local storage error'}` })
-            setToast('Could not save the new round. It was not started; retry local storage and try again.')
+            failStart('Could not save the new round. It was not started; retry local storage and try again.')
           }
           return
         }
       } else {
+        setGameLoadingEntry('save-session', 'Running without durable storage', 'Browser storage is unavailable; this session exists in memory only.', 'warning')
         setToast('Local storage is unavailable. This game is running in memory only and may not survive a reload.')
       }
       lastSetupRef.current = config
+      setGameLoadingEntry('game-ready', `${gameName} is ready`, 'Opening the game on this device.', 'complete')
       setSave(nextSave)
       setScreen('play')
+    } catch (error) {
+      failStart(error instanceof Error ? error.message : `Could not start ${gameName}. Try again.`)
     } finally {
+      const minimumVisibleMs = startFailedRef.current ? 1_100 : 700
+      const remainingMs = Math.max(0, minimumVisibleMs - (Date.now() - startedAt))
+      if (remainingMs) await new Promise(resolve => window.setTimeout(resolve, remainingMs))
+      // Keep the final "game ready" state visible long enough to read the last
+      // streamed backend/provider events before the overlay leaves the screen.
+      if (!startFailedRef.current) await new Promise(resolve => window.setTimeout(resolve, 400))
+      setGameLoading(null)
       startPendingRef.current = false
     }
   }
@@ -1490,6 +1625,14 @@ export default function AppShell({ initialState, initialRevision, initialPersist
       </Suspense>}
       </div>
     </main>
+    {gameLoading && <GameLoadingOverlay
+      game={gameLoading.game}
+      gameName={gameLoading.gameName}
+      currentTitle={gameLoading.currentTitle}
+      currentDetail={gameLoading.currentDetail}
+      entries={gameLoading.entries}
+      reduceMotion={systemReducedMotion || save.motionPreference === 'reduce'}
+    />}
     {creatorModalOpen && <dialog ref={creatorDialogRef} className="creator-unlock-panel" aria-labelledby="creator-unlock-title">
       <button type="button" className="creator-unlock-close" aria-label="Close" onClick={() => { setCreatorModalOpen(false); setCreatorSecret('') }}>×</button>
       <p className="eyebrow">PRIVATE ACCESS</p>

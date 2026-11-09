@@ -77,6 +77,16 @@ jobs:
           if [ ! -d src-tauri/gen/android ]; then
             bun run tauri android init --ci
           fi
+      - name: Generate KING-FUN Android launcher icons
+        shell: bash
+        run: |
+          bun run tauri icon frontend/public/king-fun-logo-source.svg
+          resource_dir=src-tauri/gen/android/app/src/main/res
+          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            for icon in ic_launcher.png ic_launcher_round.png ic_launcher_foreground.png; do
+              test -s "$resource_dir/mipmap-$density/$icon"
+            done
+          done
 
       - name: Configure Android compiler warnings
         shell: bash
@@ -183,7 +193,7 @@ jobs:
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: tauri-android
+          name: tauri-android-ci-unsigned
           if-no-files-found: error
           path: |
             src-tauri/gen/android/**/outputs/**
