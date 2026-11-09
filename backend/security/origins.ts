@@ -12,7 +12,8 @@ export function parseAllowedOrigins(value: string | undefined, production: boole
         && !parsed.search
         && !parsed.hash
       if (!isExactOrigin) continue
-      if (production ? parsed.protocol === 'https:' : parsed.protocol === 'https:' || (parsed.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname))) {
+      const trustedTauriOrigin = parsed.protocol === 'http:' && parsed.hostname === 'tauri.localhost' && parsed.pathname === '/'
+      if (production ? parsed.protocol === 'https:' || trustedTauriOrigin : parsed.protocol === 'https:' || (parsed.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]', 'tauri.localhost'].includes(parsed.hostname))) {
         origins.add(candidate)
       }
     } catch {

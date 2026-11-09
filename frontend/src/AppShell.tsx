@@ -684,9 +684,9 @@ export default function AppShell({ initialState, initialRevision, initialPersist
           return
         }
 
-        // Use the bundled catalogue first on every platform. The provider pipeline
-        // remains available when the selected category is exhausted.
-        const localWordPool = uniqueContentItems(gameContentItems.filter(item =>
+        // Built-in categories intentionally require the provider pipeline.
+        // Only explicitly user-authored/imported packs may draw local words.
+        const localWordPool = sourcePack.isDefault ? [] : uniqueContentItems(gameContentItems.filter(item =>
           item.gameId === 'imposter' && item.kind === 'word' && item.packId === sourcePack.id,
         ))
         const categoryWordQueueKey = localWordPool[0]

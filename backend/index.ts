@@ -14,7 +14,7 @@ const env = process.env as NodeJS.ProcessEnv & ProviderEnv
 const inferredVercelOrigins = [env.VERCEL_PROJECT_PRODUCTION_URL, env.VERCEL_URL]
   .filter((value): value is string => Boolean(value?.trim()))
   .map(value => `https://${value.trim().replace(/^https?:\/\//, '')}`)
-const allowedOrigins = parseAllowedOrigins(env.FRONTEND_ORIGINS, env.NODE_ENV === 'production', inferredVercelOrigins)
+const allowedOrigins = parseAllowedOrigins(env.FRONTEND_ORIGINS, env.NODE_ENV === 'production', [...inferredVercelOrigins, 'http://tauri.localhost'])
 const allowedProviders = new Set<ProviderId>(['gemini', 'groq', 'cloudflare-workers-ai'])
 const maxBodyBytes = 12_000
 const feedbackBodyBytes = 2_000
