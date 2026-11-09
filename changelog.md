@@ -1,3 +1,23 @@
+## 2026-11-09 — Cloudflare GPT-OSS completion budget follow-up
+
+- Removed restrictive Cloudflare per-game token caps that could truncate GPT-OSS before the final JSON was complete. Imposter now receives the full 6,000-token task allowance; other Cloudflare requests retain the 4,000-token default.
+- Preserved `AI_MAX_OUTPUT_TOKENS` as an explicit global operator ceiling.
+- Cloudflare truncation errors now report the exact `max_tokens` sent and instruct operators to verify the deployed backend revision and global setting. Partial JSON with `finish_reason: length` is detected before attempting JSON parse.
+- Updated provider regression tests, release-contract checks, and deployment/provider documentation.
+- Runtime Bun tests and uncached live Cloudflare inference remain required after deployment.
+
+## 2026-11-09 — Cloudflare Imposter output-limit correction
+
+### Fixed
+- Corrected the Cloudflare-only Imposter output ceiling from 1,024 to 4,096 tokens. The configured model is GPT-OSS 20B, a reasoning model; its completion budget must accommodate reasoning tokens before it can finish the compact word-plus-20-hints JSON object. The global operator ceiling remains respected.
+- Removed contradictory and duplicated Imposter prompt instructions. The old prompt told the model to return the secret answer in the required `text` field while also saying not to generate anything besides hints. The new instruction explicitly requires one answer in `text` and exactly 20 distinct, indirect 1–2-word hints in `hints`.
+- Removed the Imposter-only hint paragraph from unrelated game prompts. This reduces noise and prevents unrelated party games from receiving irrelevant constraints.
+- Increased Cloudflare-only short-batch ceilings to 2,048 for five GuessUp charades and 3,072 for five Party Arcade prompts. Gemini/Groq output settings and all game batch sizes remain unchanged.
+- Added regression assertions for the single-answer/20-hint prompt, absence of the contradictory instruction, and the revised provider budgets.
+
+### Verification boundary
+- Source and test contracts were updated. Bun 1.4.4 unit/typecheck/lint/build and a fresh uncached live Cloudflare request still need to run in the deployment environment; no live inference success is claimed from this patch.
+
 ## 2026-11-09 — One-word Imposter generation across all providers
 
 ### Changed

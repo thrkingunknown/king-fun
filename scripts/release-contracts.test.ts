@@ -36,14 +36,19 @@ describe('Phase 6 release hardening contracts', () => {
     expect(schemaTests).toContain('strips it before provider routing')
   })
 
-  test('Cloudflare short-batch token budgets stay bounded and isolated to Workers AI', () => {
+  test('Cloudflare task-aware output budgets remain isolated to Workers AI and leave GPT-OSS reasoning room', () => {
     const adapter = read('backend/providers/generate.ts')
     const providerTests = read('backend/tests/providers.test.ts')
-    expect(adapter).toContain("input.game === 'guessup' && input.itemKind === 'charade') return Math.min(configuredLimit, 1_024)")
-    expect(adapter).toContain("if (input.itemKind === 'party-prompt') return Math.min(configuredLimit, 2_048)")
-    expect(adapter).toContain("if (provider !== 'cloudflare-workers-ai') return configuredLimit")
+    expect(adapter).toContain("GPT-OSS is a reasoning model and Cloudflare's max_tokens is the complete")
+    expect(adapter).toContain('return configuredLimit')
+    expect(adapter).toContain('GPT-OSS is a reasoning model')
+    expect(adapter).toContain('put the answer in text and exactly 20 distinct, indirect hints in hints')
+    expect(adapter).not.toContain('Do not generate any other content besides the hints')
     expect(providerTests).toContain('Cloudflare bounds GuessUp charade and five-item party-prompt output')
     expect(providerTests).toContain('Cloudflare retains the generic token budget for longer Truth prompts')
+    expect(providerTests).toContain('Cloudflare output truncation reports the server-side token-budget cause')
+    expect(adapter).toContain("choice.finish_reason === 'length'")
+    expect(providerTests).toContain('max_tokens).toBe(6_000)')
     expect(providerTests).toContain('generationConfig?.maxOutputTokens).toBe(4_000)')
     expect(providerTests).toContain('max_completion_tokens).toBe(4_000)')
   })

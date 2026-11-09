@@ -239,7 +239,7 @@ The current automated domain test files cover the report-defined source behavior
 - **TEST-AI-005:** timeouts, network failures, and transient 5xx use bounded retry/cooldown; 401/403/429/policy/validation errors do not enter infinite retry.
 - **TEST-AI-006:** circuit breaker stops repeated calls after threshold and recovers after configured cooldown; kill switch prevents further Cloudflare AI spend.
 - **TEST-AI-007:** Cloudflare Workers AI adapter uses server-side Account ID/token/model and validates the actual REST response shape; no secret is returned.
-- **TEST-AI-029:** Cloudflare uses its isolated 52-second timeout (capped below Vercel's 60-second function deadline), a 1,024-token ceiling for one-word Imposter and five-item GuessUp charade requests, a 2,048-token ceiling for five-item Party Arcade prompts, and `options.rejectIfBusy` to avoid waiting in provider capacity queues; longer Truth/Dare/statement tasks keep the configured limit and Gemini/Groq remain unchanged.
+- **TEST-AI-029:** Cloudflare uses its isolated 52-second timeout (capped below Vercel's 60-second function deadline), the full 6,000-token task-aware ceiling for one-word/20-hint Imposter generation, and the 4,000-token default for GuessUp/Party Arcade batches, and `options.rejectIfBusy` to avoid waiting in provider capacity queues; longer Truth/Dare/statement tasks keep the configured limit and Gemini/Groq remain unchanged.
 - **TEST-AI-008:** Gemini adapter uses a current official key-auth/request schema and validates its returned structured content.
 - **TEST-AI-009:** Groq adapter uses the current official API endpoint/schema and validates its returned structured content.
 - **TEST-AI-010:** every provider output is validated against runtime schema, count, lengths, locale, category, item kind, and suitability.
@@ -846,5 +846,21 @@ The service-worker shell cache is now `king-fun-shell-v8` because the applicatio
 
 - Verify that the frontend requests `count: 1` for Imposter words and the backend normalizes legacy `count: 5` requests to `count: 1` for Gemini, Groq, and Cloudflare.
 - Verify all other game requests retain their requested batch sizes.
-- Verify every provider's Imposter single-word response retains the exact 20-hint validation contract; Cloudflare continues to use its 1,024-token response ceiling.
+- Verify every provider's Imposter single-word response retains the exact 20-hint validation contract; Cloudflare uses the full 6,000-token task-aware ceiling to leave GPT-OSS reasoning room, still respecting an explicit global operator ceiling.
 - Perform a fresh, uncached Imposter start after deployment and inspect the request's `provider-generated` event and `provider` result; a `content-vault` hit does not prove live inference.
+
+
+### Cloudflare GPT-OSS output budget and Imposter prompt
+
+- Cloudflare Imposter requests use one normalized secret word, exactly 20 validated 1–2-word hints, and a 6,000-token task-aware ceiling (still respecting an explicitly configured global `AI_MAX_OUTPUT_TOKENS` ceiling).
+- The Imposter prompt must explicitly put the secret answer in `text` and hints in `hints`; it must not contain the contradictory instruction to generate only hints. Non-Imposter prompts must not include Imposter-only hint guidance.
+- Cloudflare five-item GuessUp and Party Arcade batches retain the 4,000-token default rather than using smaller task-specific caps. Gemini/Groq parameters, game mechanics and provider deadlines remain unchanged.
+- Mock provider tests verify the emitted request body and prompt contract. A fresh, uncached live Workers AI request is an opt-in deployment acceptance test, not part of ordinary CI.
+
+
+## Cloudflare GPT-OSS completion-budget follow-up (2026-11-09)
+
+- Cloudflare GPT-OSS now receives the full task-aware completion budget: 6,000 tokens for Imposter word/hints, 4,000 default for other requests; explicit `AI_MAX_OUTPUT_TOKENS` continues to act as a global operator ceiling.
+- No smaller per-game completion caps are applied to GPT-OSS, because the configured completion budget must cover reasoning and final JSON.
+- The provider-specific truncation message includes the exact `max_tokens` sent, so a deployed screenshot can identify the backend revision/budget.
+- Regression tests cover the 6,000 Imposter budget, 4,000 five-item batches, global override, actionable truncation message, and partial JSON with `finish_reason: length`.

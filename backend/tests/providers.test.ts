@@ -82,7 +82,31 @@ describe('provider adapters', () => {
       CLOUDFLARE_API_TOKEN: 'c'.repeat(32),
     })
     expect(capturedBody?.options).toEqual({ rejectIfBusy: true })
-    expect(capturedBody?.max_tokens).toBe(1_024)
+    expect(capturedBody?.reasoning_effort).toBe('low')
+    expect(capturedBody?.max_tokens).toBe(6_000)
+    const messages = capturedBody?.messages as Array<{ role: string; content: string }>
+    const prompt = messages.map(message => message.content).join('\n')
+    expect(prompt).toContain('put the answer in text')
+    expect(prompt).toContain('exactly 20 distinct, indirect hints')
+    expect(prompt).not.toContain('Do not generate any other content besides the hints')
+    const responseFormat = capturedBody?.response_format as { type?: string }
+    expect(responseFormat.type).toBe('json_object')
+  })
+
+  test('Cloudflare output truncation reports the server-side token-budget cause', async () => {
+    globalThis.fetch = (async () => Response.json({
+      choices: [{ finish_reason: 'length', message: { content: '{\"items\":[{\"text\":\"Penguin\",' } }] },
+    })) as typeof fetch
+    await expect(generateWithProvider('cloudflare-workers-ai', {
+      ...input, game: 'imposter', itemKind: 'word', count: 1, categoryId: 'animals',
+    }, {
+      AI_ENABLED: 'true',
+      CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32),
+      CLOUDFLARE_API_TOKEN: 'c'.repeat(32),
+    })).rejects.toMatchObject({
+      code: 'INVALID_RESPONSE',
+      message: 'Cloudflare Workers AI stopped at the 6,000-token completion limit before returning the complete JSON response. Check the deployed backend version and server-side AI_MAX_OUTPUT_TOKENS setting, then retry.',
+    })
   })
 
   test('Cloudflare bounds GuessUp charade and five-item party-prompt output', async () => {
@@ -92,8 +116,8 @@ describe('provider adapters', () => {
       CLOUDFLARE_API_TOKEN: 'c'.repeat(32),
     }
     for (const scenario of [
-      { request: { ...input, count: 5 }, expected: 1_024, prefix: 'Charade' },
-      { request: { ...input, game: 'fake-story' as const, itemKind: 'party-prompt' as const, count: 5 }, expected: 2_048, prefix: 'Story prompt' },
+      { request: { ...input, count: 5 }, expected: 4_000, prefix: 'Charade' },
+      { request: { ...input, game: 'fake-story' as const, itemKind: 'party-prompt' as const, count: 5 }, expected: 4_000, prefix: 'Story prompt' },
     ]) {
       let capturedBody: Record<string, unknown> | undefined
       globalThis.fetch = (async (_url, init) => {
@@ -104,6 +128,23 @@ describe('provider adapters', () => {
       await generateWithProvider('cloudflare-workers-ai', scenario.request, env)
       expect(capturedBody?.max_tokens).toBe(scenario.expected)
     }
+  })
+
+  test('Cloudflare respects an explicit global output-token ceiling', async () => {
+    let capturedBody: Record<string, unknown> | undefined
+    globalThis.fetch = (async (_url, init) => {
+      capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ items: [{ text: 'Penguin', hints: Array.from({ length: 20 }, (_, index) => `hint${index + 1}`) }] }) } }] })
+    }) as typeof fetch
+    await generateWithProvider('cloudflare-workers-ai', {
+      ...input, game: 'imposter', itemKind: 'word', count: 1, categoryId: 'animals',
+    }, {
+      AI_ENABLED: 'true',
+      AI_MAX_OUTPUT_TOKENS: '2048',
+      CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32),
+      CLOUDFLARE_API_TOKEN: 'c'.repeat(32),
+    })
+    expect(capturedBody?.max_tokens).toBe(2_048)
   })
 
   test('Cloudflare retains the generic token budget for longer Truth prompts', async () => {
@@ -137,6 +178,7 @@ describe('provider adapters', () => {
     expect(serializedPrompt).not.toContain('KF_PRIVATE_ALICE')
     expect(serializedPrompt).not.toContain('KF_PRIVATE_BOB')
     expect(serializedPrompt).not.toContain('Player names')
+    expect(serializedPrompt).not.toContain('exactly 20 distinct, indirect hints')
   })
 
   test('Cloudflare supports explicitly enabled adult generation', async () => {
