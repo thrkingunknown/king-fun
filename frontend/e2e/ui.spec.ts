@@ -304,17 +304,56 @@ test.describe('KING-FUN responsive experience', () => {
       request.method() === 'POST' && request.url().includes('/v1/content/generate'),
       { timeout: 10_000 },
     )
+    // The loading overlay is intentionally unmounted after the game becomes
+    // ready. Capture its changing text while it exists so this test verifies
+    // the complete startup history without racing that final handoff.
+    await page.evaluate(() => {
+      const state = window as Window & {
+        __kingFunStartupHistory?: string[]
+        __kingFunStartupObserver?: MutationObserver
+      }
+      const history: string[] = []
+      const capture = (node: Node) => {
+        const element = node instanceof Element ? node : node.parentElement
+        if (!element) return
+        const overlay = element.matches('.game-loading-layer')
+          ? element
+          : element.closest('.game-loading-layer') ?? element.querySelector('.game-loading-layer')
+        if (!overlay) return
+        const snapshot = (overlay as HTMLElement).innerText
+        if (history.at(-1) !== snapshot) history.push(snapshot)
+      }
+      const observer = new MutationObserver(records => {
+        for (const record of records) {
+          capture(record.target)
+          record.addedNodes.forEach(capture)
+          record.removedNodes.forEach(capture)
+        }
+      })
+      observer.observe(document.body, { childList: true, characterData: true, subtree: true })
+      state.__kingFunStartupHistory = history
+      state.__kingFunStartupObserver = observer
+    })
+
     await page.getByRole('button', { name: /^Start game/i }).click()
     const loadingOverlay = page.locator('.game-loading-layer')
     await expect(loadingOverlay).toBeVisible({ timeout: 3_000 })
     const generationRequestObserved = await generationRequestPromise
     expect(generationRequestObserved.url()).toContain('/v1/content/generate')
-    await expect(loadingOverlay).toContainText('No matching content in the vault')
-    await expect(loadingOverlay).toContainText(/generated content/i)
-    await expect(loadingOverlay).toContainText('Validated content saved to vault')
-    await expect(loadingOverlay).toContainText(/Content ready from/)
     const roleCard = page.locator('#imposter-role-reveal')
     await expect(roleCard).toBeVisible({ timeout: 10_000 })
+    const startupHistory = await page.evaluate(() => {
+      const state = window as Window & {
+        __kingFunStartupHistory?: string[]
+        __kingFunStartupObserver?: MutationObserver
+      }
+      state.__kingFunStartupObserver?.disconnect()
+      return state.__kingFunStartupHistory?.join('\n') ?? ''
+    })
+    expect(startupHistory).toContain('No matching content in the vault')
+    expect(startupHistory).toMatch(/generated content/i)
+    expect(startupHistory).toContain('Validated content saved to vault')
+    expect(startupHistory).toMatch(/Content ready from/)
     expect(generationRequest).toMatchObject({
       game: 'imposter',
       itemKind: 'word',

@@ -20,6 +20,16 @@ describe('Phase 6 release hardening contracts', () => {
     expect(browser).not.toContain("categoryName === 'Animals'")
   })
 
+  test('Imposter startup progress assertions survive the loading overlay handoff', () => {
+    const browser = read('frontend/e2e/ui.spec.ts')
+    const audit = read('scripts/check-release-contracts.mjs')
+    expect(browser).toContain('state.__kingFunStartupObserver = observer')
+    expect(browser).toContain("state.__kingFunStartupObserver?.disconnect()")
+    expect(browser).toContain("expect(startupHistory).toMatch(/Content ready from/)")
+    expect(audit).toContain("browserSpec.includes('state.__kingFunStartupObserver = observer')")
+    expect(audit).toContain("browserSpec.includes('expect(startupHistory).toMatch(/Content ready from/)')")
+  })
+
   test('latest lint, seeded-content, and all-games E2E regressions stay fixed', () => {
     const ambient = read('frontend/src/components/ui/AmbientBackground.tsx')
     const canonical = read('frontend/src/domain/content/canonicalize.test.ts')

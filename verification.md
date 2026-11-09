@@ -1406,3 +1406,20 @@ Run `bun install --frozen-lockfile`, `bun run check`, and `bun run test:e2e` on 
 - Added a deterministic mocked generation response for the opening statement.
 - Expanded visible startup history from six to twelve entries and added a short final-state handoff so vault-save and provider events can be read.
 - Added three release-contract checks for these regressions.
+
+
+## Cloudflare Workers AI timeout investigation (2026-11-09)
+
+- Source trace: the screenshot's `Provider request timed out.` message is emitted by the backend provider adapter when its upstream fetch hits the server-side abort deadline (or Cloudflare returns HTTP 408/504). The provider request is made from the backend, not from the Android device.
+- The same backend adapter serves Android PWA, Tauri Android, and desktop web. The client transports differ, but the selected Cloudflare provider uses the same server-side URL, credentials, request format, and provider timeout. A platform-only diagnosis is therefore not supported by this source trace.
+- Ordinary generation is cache-first: a Windows success can be a content-vault hit and may not prove a live Workers AI call. The provider connection-test header bypasses the vault, but its built-in test payload is a single Truth-or-Dare item and is not equivalent to the five-word/twenty-hint Imposter batch.
+- Narrow source fix: give Workers AI its own 52-second upstream deadline (still below the configured Vercel 60-second function maximum), cap only Imposter word batches at 3,072 output tokens, and set Cloudflare's documented top-level `options.rejectIfBusy` to fail fast on capacity queues. Gemini/Groq and all frontend/game flows remain unchanged.
+- Local verification: direct Node TypeScript-stripping smoke test passed for Cloudflare payload options, Imposter and non-Imposter token budgets, schema validation, and timeout isolation; release-contract audit exited 0. Full Bun tests, a live same-payload provider comparison, production deployment latency, and Android browser/Tauri device acceptance were not available in this runtime.
+
+
+## 2026-11-09 — Imposter role-reveal E2E failure triage
+
+- User-provided Playwright run: 20 tests passed; the role-reveal case failed at the final `Content ready from` assertion because `.game-loading-layer` had already been unmounted. The failure occurred before the role-card press/release assertions and does not demonstrate a defect in the reveal interaction.
+- Root cause: the test read historical startup messages sequentially from a transient overlay after game startup. The production flow intentionally clears the overlay after the game-ready handoff, so a slow test runner can lose the locator between assertions.
+- Source correction: observe overlay text mutations during startup, then assert the captured vault/provider/save/content-ready history after the role card appears. The Node release-contract audit and Bun regression-contract test were updated to guard this handoff behavior. Production UI timing, game behavior, and provider integrations are unchanged.
+- Verification boundary: Bun and Playwright are not installed in this authoring environment, so the focused E2E and full browser suite must be rerun on the user's Bun workspace.

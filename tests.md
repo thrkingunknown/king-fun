@@ -129,7 +129,7 @@ The current implementation adds `src/domain/shared/validation.test.ts`, `src/dom
 - The shared startup overlay appears for every game Start path, displays the selected `GameMark`, respects reduced motion, and remains visible until the local session is ready. The Imposter generation E2E responds with NDJSON progress frames and asserts content-vault lookup, provider generation, validated-content save, and ready states are visible before gameplay.
 - Backend route tests verify that `Accept: application/x-ndjson` streams ordered progress frames followed by a final status/body frame, while ordinary clients retain the existing JSON response contract.
 
-- The role-reveal browser regression stubs `/api/v1/content/generate` with a schema-shaped five-word batch and asserts that the selected built-in category title/description reach the provider pipeline. This keeps the reveal test deterministic without restoring a bundled word bank or depending on a live provider/backend.
+- The role-reveal browser regression stubs `/api/v1/content/generate` with a schema-shaped five-word batch and asserts that the selected built-in category title/description reach the provider pipeline. This keeps the reveal test deterministic without restoring a bundled word bank or depending on a live provider/backend. The test captures the loading overlay's text mutations through its intentional unmount, so startup-history assertions do not race the final game-ready handoff.
 
 - **TEST-IMP-001:** valid player roster starts a round; invalid roster is rejected.
 - **TEST-IMP-002:** civilian/special role counts match the configured ruleset.
@@ -239,6 +239,7 @@ The current automated domain test files cover the report-defined source behavior
 - **TEST-AI-005:** timeouts, network failures, and transient 5xx use bounded retry/cooldown; 401/403/429/policy/validation errors do not enter infinite retry.
 - **TEST-AI-006:** circuit breaker stops repeated calls after threshold and recovers after configured cooldown; kill switch prevents further Cloudflare AI spend.
 - **TEST-AI-007:** Cloudflare Workers AI adapter uses server-side Account ID/token/model and validates the actual REST response shape; no secret is returned.
+- **TEST-AI-029:** Cloudflare uses its isolated 52-second timeout (capped below Vercel's 60-second function deadline), a 3,072-token ceiling for Imposter word batches only (other game outputs retain their existing allowance), and `options.rejectIfBusy` to avoid waiting in provider capacity queues; Gemini/Groq timeout settings remain unchanged.
 - **TEST-AI-008:** Gemini adapter uses a current official key-auth/request schema and validates its returned structured content.
 - **TEST-AI-009:** Groq adapter uses the current official API endpoint/schema and validates its returned structured content.
 - **TEST-AI-010:** every provider output is validated against runtime schema, count, lengths, locale, category, item kind, and suitability.

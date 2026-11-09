@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { generateWithProvider } from '../providers/generate.ts'
+import { generateWithProvider, getProviderTimeout } from '../providers/generate.ts'
 
 const originalFetch = globalThis.fetch
 afterEach(() => { globalThis.fetch = originalFetch })
@@ -44,6 +44,45 @@ describe('provider adapters', () => {
 
   test('Cloudflare remains operator-managed and rejects client credentials', async () => {
     await expect(generateWithProvider('cloudflare-workers-ai', input, { AI_ENABLED: 'true' })).rejects.toMatchObject({ code: 'PROVIDER_NOT_CONFIGURED' })
+  })
+
+  test('Cloudflare has a provider-specific timeout while Gemini/Groq keep the normal deadline', () => {
+    expect(getProviderTimeout({}, 'cloudflare-workers-ai')).toBe(52_000)
+    expect(getProviderTimeout({ AI_PROVIDER_TIMEOUT_MS: '45000' }, 'cloudflare-workers-ai')).toBe(52_000)
+    expect(getProviderTimeout({ CLOUDFLARE_AI_TIMEOUT_MS: '60000' }, 'cloudflare-workers-ai')).toBe(52_000)
+    expect(getProviderTimeout({ CLOUDFLARE_AI_TIMEOUT_MS: '30000' }, 'cloudflare-workers-ai')).toBe(30_000)
+    expect(getProviderTimeout({ AI_PROVIDER_TIMEOUT_MS: '40000' }, 'gemini')).toBe(40_000)
+  })
+
+  test('Cloudflare rejects capacity-queue waits and bounds generation output', async () => {
+    let capturedBody: Record<string, unknown> | undefined
+    globalThis.fetch = (async (_url, init) => {
+      capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      return Response.json({ choices: [{ message: { content: JSON.stringify({ items: [{ text: 'Penguin', hints: Array.from({ length: 20 }, (_, index) => `hint${index + 1}`) }] }) } }] })
+    }) as typeof fetch
+    await generateWithProvider('cloudflare-workers-ai', {
+      ...input, game: 'imposter', itemKind: 'word', count: 1, categoryId: 'animals',
+    }, {
+      AI_ENABLED: 'true',
+      CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32),
+      CLOUDFLARE_API_TOKEN: 'c'.repeat(32),
+    })
+    expect(capturedBody?.options).toEqual({ rejectIfBusy: true })
+    expect(capturedBody?.max_tokens).toBe(3_072)
+  })
+
+  test('Cloudflare keeps the existing token budget for non-Imposter generation', async () => {
+    let capturedBody: Record<string, unknown> | undefined
+    globalThis.fetch = (async (_url, init) => {
+      capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      return Response.json({ choices: [{ message: { content: '{"items":[{"text":"Penguin walk","hints":[]}]}' } }] })
+    }) as typeof fetch
+    await generateWithProvider('cloudflare-workers-ai', input, {
+      AI_ENABLED: 'true',
+      CLOUDFLARE_ACCOUNT_ID: 'a'.repeat(32),
+      CLOUDFLARE_API_TOKEN: 'c'.repeat(32),
+    })
+    expect(capturedBody?.max_tokens).toBe(4_000)
   })
 
   test('Cloudflare supports explicitly enabled adult generation', async () => {

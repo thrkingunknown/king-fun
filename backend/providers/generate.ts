@@ -11,6 +11,7 @@ export type ProviderEnv = {
   AI_ENABLED?: string
   AI_MAX_OUTPUT_TOKENS?: string
   AI_PROVIDER_TIMEOUT_MS?: string
+  CLOUDFLARE_AI_TIMEOUT_MS?: string
 }
 
 function responseSchemaFor(input: GenerateInput) {
@@ -277,9 +278,25 @@ function getOutputTokenLimit(env: ProviderEnv, input: GenerateInput): number {
   if (Number.isSafeInteger(configured) && configured >= 256) return Math.min(configured, 6000)
   return input.game === 'imposter' && input.itemKind === 'word' ? 6000 : 4000
 }
-function getTimeout(env: ProviderEnv): number {
-  const configured = Number(env.AI_PROVIDER_TIMEOUT_MS)
-  return Number.isSafeInteger(configured) && configured >= 3_000 ? Math.min(configured, 45_000) : 45_000
+/**
+ * Keep provider deadlines inside the Vercel function's 60s maxDuration.
+ * Workers AI GPT-OSS has a larger generation/queue profile than the BYOK
+ * providers, so it gets its own bounded budget without changing Gemini/Groq.
+ */
+export function getProviderTimeout(env: ProviderEnv, provider: ProviderId): number {
+  const isCloudflare = provider === 'cloudflare-workers-ai'
+  const configured = Number(isCloudflare ? env.CLOUDFLARE_AI_TIMEOUT_MS : env.AI_PROVIDER_TIMEOUT_MS)
+  const fallback = isCloudflare ? 52_000 : 45_000
+  const maximum = isCloudflare ? 52_000 : 45_000
+  return Number.isSafeInteger(configured) && configured >= 3_000 ? Math.min(configured, maximum) : fallback
+}
+
+function getProviderOutputTokenLimit(provider: ProviderId, input: GenerateInput, configuredLimit: number): number {
+  // Only the heavy Imposter word batch needs a lower ceiling. Preserve the
+  // existing budget for every other game/provider combination.
+  return provider === 'cloudflare-workers-ai' && input.game === 'imposter' && input.itemKind === 'word'
+    ? Math.min(configuredLimit, 3_072)
+    : configuredLimit
 }
 function validateModel(value: string, provider: ProviderId): string {
   const valid = provider === 'gemini'
@@ -301,8 +318,8 @@ export async function generateWithProvider(
   if (input.suitability === 'adult' && input.adultMode !== true) throw new SafeProviderError('INVALID_REQUEST', 'Adult generation requires explicit 18+ mode.', false, 400)
   if (env.AI_ENABLED !== 'true') throw new SafeProviderError('BUDGET_EXHAUSTED', 'AI generation is disabled by the operator.', false, 503)
   const prompt = promptFor(input)
-  const maxOutputTokens = getOutputTokenLimit(env, input)
-  const timeoutMs = getTimeout(env)
+  const maxOutputTokens = getProviderOutputTokenLimit(provider, input, getOutputTokenLimit(env, input))
+  const timeoutMs = getProviderTimeout(env, provider)
   const configuredSessionKey = sessionKey?.trim()
   let data: unknown
 
@@ -359,6 +376,9 @@ export async function generateWithProvider(
         max_tokens: maxOutputTokens,
         response_format: { type: 'json_object' },
         reasoning_effort: 'low',
+        // Do not wait in Cloudflare's capacity queue: this serverless request
+        // has a strict 60s host deadline and should surface capacity as 429.
+        options: { rejectIfBusy: true },
         stream: false,
       }),
     }, callerSignal, timeoutMs)

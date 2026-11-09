@@ -1187,3 +1187,18 @@ Release process:
 - Render the retained startup history instead of truncating it to six rows, so confirmed provider and content-vault events remain inspectable through the handoff.
 - Keep the completed startup state visible briefly after the game becomes ready.
 - Corrected the I Have Never startup E2E: spin-wheel mode intentionally waits for player selection, so the test now selects One at a time and stubs the generation API with a deterministic opening statement.
+
+## 2026-11-09 — Cloudflare Workers AI mobile timeout hardening
+
+- Kept the frontend and game flows unchanged. The Cloudflare backend adapter now has an isolated 52-second timeout (hard-capped below the Vercel function's 60-second limit), while Gemini/Groq retain their existing 45-second timeout behavior.
+- Capped only Cloudflare Imposter word batches at 3,072 output tokens; other Cloudflare game requests keep their existing token allowance.
+- Added Cloudflare's documented `options.rejectIfBusy: true` so saturated capacity returns an actionable rate-limit response rather than waiting until the serverless deadline.
+- Added focused provider tests for timeout isolation, timeout caps, output limits and capacity-queue handling.
+- This addresses the source-level timeout bottleneck; live Cloudflare/Vercel account latency and Android device acceptance still require a deployed test.
+
+
+## 2026-11-09 — Imposter startup E2E handoff race
+
+- Fixed the role-reveal browser test's transient-overlay race: it now records the startup overlay's text history while mounted and verifies the vault lookup, provider generation, confirmed vault save, and content-ready events after the role card is ready.
+- Updated the static release-contract audit and added a Bun regression contract for the history-capture strategy.
+- Kept the production loading-overlay lifecycle and game-start timing unchanged; this corrects only the test's assumption that the overlay remains mounted through sequential assertions.
