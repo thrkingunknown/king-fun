@@ -40,9 +40,9 @@
     "check:dependencies": "bun run scripts/check-workspace-dependencies.mjs"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.12.4",
+    "@tauri-apps/cli": "^2.12.6",
     "@types/node": "^26.6.6",
-    "oxlint": "^1.93.0",
+    "oxlint": "^1.94.0",
     "typescript": "~7.0.2"
   },
   "overrides": {
